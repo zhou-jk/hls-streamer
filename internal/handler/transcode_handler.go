@@ -1,0 +1,111 @@
+package handler
+
+import (
+	"github.com/gin-gonic/gin"
+
+	"github.com/Zhou-JK/hls-streamer/internal/service"
+	"github.com/Zhou-JK/hls-streamer/pkg/response"
+)
+
+type TranscodeHandler struct {
+	transcodeSvc *service.TranscodeService
+}
+
+func NewTranscodeHandler(transcodeSvc *service.TranscodeService) *TranscodeHandler {
+	return &TranscodeHandler{transcodeSvc: transcodeSvc}
+}
+
+func (h *TranscodeHandler) StartTranscode(c *gin.Context) {
+	uuid := c.Param("uuid")
+
+	var input service.StartTranscodeInput
+	if err := c.ShouldBindJSON(&input); err != nil {
+		response.BadRequest(c, err.Error())
+		return
+	}
+
+	tasks, err := h.transcodeSvc.StartTranscode(c.Request.Context(), uuid, input)
+	if err != nil {
+		response.InternalError(c, err.Error())
+		return
+	}
+
+	response.Created(c, tasks)
+}
+
+func (h *TranscodeHandler) ListTasks(c *gin.Context) {
+	uuid := c.Param("uuid")
+
+	tasks, err := h.transcodeSvc.ListTasks(uuid)
+	if err != nil {
+		response.InternalError(c, err.Error())
+		return
+	}
+
+	response.OK(c, tasks)
+}
+
+func (h *TranscodeHandler) GetTask(c *gin.Context) {
+	taskUUID := c.Param("task_uuid")
+
+	task, err := h.transcodeSvc.GetTask(taskUUID)
+	if err != nil {
+		response.NotFound(c, "task not found")
+		return
+	}
+
+	response.OK(c, task)
+}
+
+func (h *TranscodeHandler) GenerateThumbnails(c *gin.Context) {
+	uuid := c.Param("uuid")
+
+	var input struct {
+		Count int `json:"count"`
+		Width int `json:"width"`
+	}
+	if err := c.ShouldBindJSON(&input); err != nil {
+		response.BadRequest(c, err.Error())
+		return
+	}
+
+	if input.Count == 0 {
+		input.Count = 5
+	}
+	if input.Width == 0 {
+		input.Width = 320
+	}
+
+	task, err := h.transcodeSvc.GenerateThumbnails(c.Request.Context(), uuid, input.Count, input.Width)
+	if err != nil {
+		response.InternalError(c, err.Error())
+		return
+	}
+
+	response.Created(c, task)
+}
+
+// CancelTask cancels a pending or queued task.
+func (h *TranscodeHandler) CancelTask(c *gin.Context) {
+	taskUUID := c.Param("task_uuid")
+
+	if err := h.transcodeSvc.CancelTask(taskUUID); err != nil {
+		response.InternalError(c, err.Error())
+		return
+	}
+
+	response.OK(c, gin.H{"message": "task cancelled"})
+}
+
+// RetryTask retries a failed task.
+func (h *TranscodeHandler) RetryTask(c *gin.Context) {
+	taskUUID := c.Param("task_uuid")
+
+	task, err := h.transcodeSvc.RetryTask(c.Request.Context(), taskUUID)
+	if err != nil {
+		response.InternalError(c, err.Error())
+		return
+	}
+
+	response.OK(c, task)
+}

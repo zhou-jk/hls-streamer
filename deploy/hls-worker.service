@@ -1,0 +1,15 @@
+[Unit]
+Description=HLS Streamer Worker
+After=network.target redis.service
+
+[Service]
+Type=simple
+User=hls
+WorkingDirectory=/opt/hls-streamer
+ExecStart=/opt/hls-streamer/bin/hls-worker -config /opt/hls-streamer/configs/config.production.yaml -api http://127.0.0.1:8080
+Restart=always
+RestartSec=5
+LimitNOFILE=65535
+
+[Install]
+WantedBy=multi-user.target

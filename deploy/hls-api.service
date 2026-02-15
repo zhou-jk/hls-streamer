@@ -1,0 +1,16 @@
+[Unit]
+Description=HLS Streamer API Server
+After=network.target mysql.service redis.service
+
+[Service]
+Type=simple
+User=hls
+WorkingDirectory=/opt/hls-streamer
+ExecStart=/opt/hls-streamer/bin/hls-api -config /opt/hls-streamer/configs/config.production.yaml
+Restart=always
+RestartSec=5
+LimitNOFILE=65535
+Environment=GIN_MODE=release
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,22 @@
+# Binaries
+bin/
+*.exe
+
+# Config with secrets
+configs/config.production.yaml
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Go
+vendor/
+
+# Temp
+/tmp/
