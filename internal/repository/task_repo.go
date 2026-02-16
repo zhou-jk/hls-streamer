@@ -99,3 +99,32 @@ func (r *TaskRepo) CountPendingByVideo(videoID uint) (int64, error) {
 		Count(&count).Error
 	return count, err
 }
+
+// TaskListParams holds filters for the global task list.
+type TaskListParams struct {
+	Page    int
+	PerPage int
+	Status  string
+	Type    string
+}
+
+// ListAll returns all tasks with optional filters, ordered by created_at DESC.
+func (r *TaskRepo) ListAll(params TaskListParams) ([]model.TranscodeTask, int64, error) {
+	q := r.db.Model(&model.TranscodeTask{})
+	if params.Status != "" {
+		q = q.Where("status = ?", params.Status)
+	}
+	if params.Type != "" {
+		q = q.Where("type = ?", params.Type)
+	}
+
+	var total int64
+	if err := q.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	var tasks []model.TranscodeTask
+	offset := (params.Page - 1) * params.PerPage
+	err := q.Order("created_at DESC").Offset(offset).Limit(params.PerPage).Find(&tasks).Error
+	return tasks, total, err
+}

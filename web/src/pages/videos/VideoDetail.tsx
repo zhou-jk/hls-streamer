@@ -1,9 +1,12 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Tabs, Descriptions, Tag, Button, Form, Input, Select, Table, Space, Card, message, Popconfirm, Progress } from 'antd';
-import { ArrowLeftOutlined } from '@ant-design/icons';
+import { Tabs, Descriptions, Tag, Button, Form, Input, Select, Table, Space, Card, message, Popconfirm, Progress, Upload } from 'antd';
+import { ArrowLeftOutlined, UploadOutlined, InboxOutlined } from '@ant-design/icons';
 import { videosApi } from '../../api/videos';
 import type { Video, VideoTranslation, VideoVariant, Thumbnail, Subtitle, TranscodeTask } from '../../types';
+import axios from 'axios';
+
+const { Dragger } = Upload;
 
 const statusColors: Record<string, string> = {
   draft: 'default', processing: 'processing', ready: 'success', error: 'error', archived: 'warning',
@@ -19,6 +22,8 @@ const PRESETS = [
   { name: '2160p', width: 3840, height: 2160, bitrate_kbps: 14000 },
 ];
 
+const PART_SIZE = 10 * 1024 * 1024; // 10MB per part
+
 export default function VideoDetail() {
   const { uuid } = useParams<{ uuid: string }>();
   const navigate = useNavigate();
@@ -27,6 +32,11 @@ export default function VideoDetail() {
   const [transForm] = Form.useForm();
   const [transLang] = Form.useForm();
   const [editForm] = Form.useForm();
+  const [subForm] = Form.useForm();
+  const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [subUploading, setSubUploading] = useState(false);
+  const subFileRef = useRef<File | null>(null);
 
   const load = () => {
     if (!uuid) return;
@@ -35,7 +45,6 @@ export default function VideoDetail() {
   };
 
   useEffect(() => { load(); }, [uuid]);
-  // Poll tasks every 5s if any are processing
   useEffect(() => {
     if (!tasks.some((t) => ['queued', 'processing', 'pending'].includes(t.status))) return;
     const timer = setInterval(() => {
@@ -50,6 +59,51 @@ export default function VideoDetail() {
     await videosApi.update(video.uuid, values);
     message.success('已更新');
     load();
+  };
+
+  // Video file upload via S3 presigned multipart
+  const handleVideoUpload = async (file: File) => {
+    if (!uuid) return;
+    setUploading(true);
+    setUploadProgress(0);
+    try {
+      const partCount = Math.ceil(file.size / PART_SIZE);
+      const contentType = file.type || 'video/mp4';
+
+      // 1. Initiate multipart upload
+      const initRes = await videosApi.initiateUpload(uuid, {
+        filename: file.name,
+        content_type: contentType,
+        part_count: partCount,
+      });
+      const { upload_id, part_urls, s3_key } = initRes.data.data;
+
+      // 2. Upload each part to presigned URL
+      const parts: { part_number: number; etag: string }[] = [];
+      for (let i = 1; i <= partCount; i++) {
+        const start = (i - 1) * PART_SIZE;
+        const end = Math.min(i * PART_SIZE, file.size);
+        const blob = file.slice(start, end);
+
+        const res = await axios.put(part_urls[i], blob, {
+          headers: { 'Content-Type': contentType },
+        });
+        const etag = res.headers['etag'] || res.headers['ETag'] || '';
+        parts.push({ part_number: i, etag: etag.replace(/"/g, '') });
+        setUploadProgress(Math.round((i / partCount) * 90));
+      }
+
+      // 3. Complete multipart upload
+      await videosApi.completeUpload(uuid, { upload_id, s3_key, parts });
+      setUploadProgress(100);
+      message.success('视频上传完成，已开始探测');
+      load();
+    } catch (err) {
+      message.error('上传失败');
+      console.error(err);
+    } finally {
+      setUploading(false);
+    }
   };
 
   const handleTranscode = async (values: { resolutions: string[]; codec: string }) => {
@@ -70,6 +124,30 @@ export default function VideoDetail() {
     await videosApi.generateThumbnails(video.uuid, { count: 5, width: 320 });
     message.success('缩略图生成任务已创建');
     load();
+  };
+
+  // Subtitle file upload
+  const handleSubtitleUpload = async (values: { language_code: string; label: string }) => {
+    if (!subFileRef.current) {
+      message.error('请选择字幕文件');
+      return;
+    }
+    setSubUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append('file', subFileRef.current);
+      fd.append('language_code', values.language_code);
+      fd.append('label', values.label);
+      await videosApi.uploadSubtitle(video.uuid, fd);
+      message.success('字幕上传成功');
+      subForm.resetFields();
+      subFileRef.current = null;
+      load();
+    } catch {
+      message.error('字幕上传失败');
+    } finally {
+      setSubUploading(false);
+    }
   };
 
   return (
@@ -98,6 +176,30 @@ export default function VideoDetail() {
                 <Form.Item name="rating" label="评级"><Input style={{ width: 80 }} /></Form.Item>
                 <Form.Item><Button type="primary" htmlType="submit">保存</Button></Form.Item>
               </Form>
+            </Card>
+          ),
+        },
+        {
+          key: 'upload', label: '上传视频',
+          children: (
+            <Card>
+              {uploading ? (
+                <div style={{ textAlign: 'center', padding: 40 }}>
+                  <Progress type="circle" percent={uploadProgress} />
+                  <p style={{ marginTop: 16 }}>正在上传视频文件...</p>
+                </div>
+              ) : (
+                <Dragger
+                  accept="video/*"
+                  maxCount={1}
+                  beforeUpload={(file) => { handleVideoUpload(file); return false; }}
+                  showUploadList={false}
+                >
+                  <p className="ant-upload-drag-icon"><InboxOutlined /></p>
+                  <p className="ant-upload-text">点击或拖拽视频文件到此区域上传</p>
+                  <p className="ant-upload-hint">支持 MP4、MKV、AVI 等常见视频格式，文件将通过分片上传到 S3</p>
+                </Dragger>
+              )}
             </Card>
           ),
         },
@@ -220,6 +322,7 @@ export default function VideoDetail() {
                 rowKey="id"
                 size="small"
                 pagination={false}
+                style={{ marginBottom: 24 }}
                 columns={[
                   { title: '语言', dataIndex: 'language_code' },
                   { title: '标签', dataIndex: 'label' },
@@ -234,6 +337,27 @@ export default function VideoDetail() {
                   },
                 ]}
               />
+              <Form form={subForm} layout="inline" onFinish={handleSubtitleUpload}>
+                <Form.Item name="language_code" rules={[{ required: true, message: '请输入语言代码' }]}>
+                  <Input placeholder="语言代码 (en/zh-CN)" style={{ width: 140 }} />
+                </Form.Item>
+                <Form.Item name="label" rules={[{ required: true, message: '请输入标签' }]}>
+                  <Input placeholder="标签 (如: 中文字幕)" style={{ width: 160 }} />
+                </Form.Item>
+                <Form.Item>
+                  <Upload
+                    accept=".vtt,.srt,.ass"
+                    maxCount={1}
+                    beforeUpload={(file) => { subFileRef.current = file; return false; }}
+                    onRemove={() => { subFileRef.current = null; }}
+                  >
+                    <Button icon={<UploadOutlined />}>选择字幕文件</Button>
+                  </Upload>
+                </Form.Item>
+                <Form.Item>
+                  <Button type="primary" htmlType="submit" loading={subUploading}>上传字幕</Button>
+                </Form.Item>
+              </Form>
             </Card>
           ),
         },

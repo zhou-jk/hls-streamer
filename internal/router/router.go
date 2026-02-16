@@ -100,6 +100,7 @@ func Setup(cfg *config.Config, h Handlers) *gin.Engine {
 
 			// Subtitles
 			videos.GET("/:uuid/subtitles", h.Video.ListSubtitles)
+			videos.POST("/:uuid/subtitles/upload", h.Upload.UploadSubtitle)
 			videos.DELETE("/:uuid/subtitles/:id", h.Video.DeleteSubtitle)
 
 			// Cast
@@ -130,6 +131,11 @@ func Setup(cfg *config.Config, h Handlers) *gin.Engine {
 
 		// Workers (admin)
 		authed.GET("/workers", middleware.RequireRole("admin"), h.Worker.ListWorkers)
+
+		// Global tasks
+		authed.GET("/tasks", h.Transcode.ListAllTasks)
+		authed.POST("/tasks/:task_uuid/cancel", h.Transcode.CancelTask)
+		authed.POST("/tasks/:task_uuid/retry", h.Transcode.RetryTask)
 	}
 
 	// Worker internal API (no JWT, should be protected by network/API key)

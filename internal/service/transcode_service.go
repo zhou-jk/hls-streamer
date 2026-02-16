@@ -230,6 +230,16 @@ func (s *TranscodeService) CancelTask(taskUUID string) error {
 	return s.taskRepo.UpdateStatus(taskUUID, "cancelled")
 }
 
+func (s *TranscodeService) ListAllTasks(params repository.TaskListParams) ([]model.TranscodeTask, int64, error) {
+	if params.Page <= 0 {
+		params.Page = 1
+	}
+	if params.PerPage <= 0 {
+		params.PerPage = 20
+	}
+	return s.taskRepo.ListAll(params)
+}
+
 func (s *TranscodeService) RetryTask(ctx context.Context, taskUUID string) (*model.TranscodeTask, error) {
 	task, err := s.taskRepo.FindByUUID(taskUUID)
 	if err != nil {

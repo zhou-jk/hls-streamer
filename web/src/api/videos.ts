@@ -1,5 +1,5 @@
 import client from './client';
-import type { ApiResponse, Video, VideoTranslation, VideoVariant, Thumbnail, Subtitle, VideoCast } from '../types';
+import type { ApiResponse, Video, VideoTranslation, VideoVariant, Thumbnail, Subtitle, VideoCast, TranscodeTask } from '../types';
 
 export const videosApi = {
   list: (params?: { page?: number; per_page?: number; status?: string; category?: number; q?: string }) =>
@@ -68,6 +68,11 @@ export const videosApi = {
   listSubtitles: (uuid: string) =>
     client.get<ApiResponse<Subtitle[]>>(`/api/v1/videos/${uuid}/subtitles`),
 
+  uploadSubtitle: (uuid: string, data: FormData) =>
+    client.post(`/api/v1/videos/${uuid}/subtitles/upload`, data, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }),
+
   deleteSubtitle: (uuid: string, id: number) =>
     client.delete(`/api/v1/videos/${uuid}/subtitles/${id}`),
 
@@ -77,4 +82,14 @@ export const videosApi = {
 
   deleteCast: (uuid: string, id: number) =>
     client.delete(`/api/v1/videos/${uuid}/cast/${id}`),
+
+  // Global tasks
+  listAllTasks: (params?: { page?: number; per_page?: number; status?: string; type?: string }) =>
+    client.get<ApiResponse<TranscodeTask[]>>('/api/v1/tasks', { params }),
+
+  cancelTask: (taskUuid: string) =>
+    client.post(`/api/v1/tasks/${taskUuid}/cancel`),
+
+  retryTask: (taskUuid: string) =>
+    client.post(`/api/v1/tasks/${taskUuid}/retry`),
 };

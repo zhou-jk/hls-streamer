@@ -123,7 +123,7 @@ func main() {
 	handlers := router.Handlers{
 		Auth:      handler.NewAuthHandler(authSvc),
 		Video:     handler.NewVideoHandler(videoSvc),
-		Upload:    handler.NewUploadHandler(uploadSvc, transcodeSvc),
+		Upload:    handler.NewUploadHandler(uploadSvc, transcodeSvc, videoSvc, s3Client),
 		Transcode: handler.NewTranscodeHandler(transcodeSvc),
 		Worker:    handler.NewWorkerHandler(workerSvc, transcodeSvc),
 		Category:  handler.NewCategoryHandler(categorySvc),

@@ -44,7 +44,7 @@ drm:
 
 worker:
   id: ""
-  concurrency: 2
+  concurrency: 1
   temp_dir: /tmp/hls-worker
   heartbeat_interval: 10s
 

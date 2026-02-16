@@ -1,19 +1,26 @@
 package handler
 
 import (
+	"fmt"
+	"io"
+
 	"github.com/gin-gonic/gin"
 
+	"github.com/Zhou-JK/hls-streamer/internal/model"
 	"github.com/Zhou-JK/hls-streamer/internal/service"
+	"github.com/Zhou-JK/hls-streamer/internal/storage"
 	"github.com/Zhou-JK/hls-streamer/pkg/response"
 )
 
 type UploadHandler struct {
 	uploadSvc    *service.UploadService
 	transcodeSvc *service.TranscodeService
+	videoSvc     *service.VideoService
+	s3           *storage.S3Client
 }
 
-func NewUploadHandler(uploadSvc *service.UploadService, transcodeSvc *service.TranscodeService) *UploadHandler {
-	return &UploadHandler{uploadSvc: uploadSvc, transcodeSvc: transcodeSvc}
+func NewUploadHandler(uploadSvc *service.UploadService, transcodeSvc *service.TranscodeService, videoSvc *service.VideoService, s3 *storage.S3Client) *UploadHandler {
+	return &UploadHandler{uploadSvc: uploadSvc, transcodeSvc: transcodeSvc, videoSvc: videoSvc, s3: s3}
 }
 
 func (h *UploadHandler) Initiate(c *gin.Context) {
@@ -60,4 +67,42 @@ func (h *UploadHandler) Complete(c *gin.Context) {
 		"message":   "upload complete, probe started",
 		"task_uuid": task.TaskUUID,
 	})
+}
+
+// UploadSubtitle handles multipart form file upload for subtitles.
+func (h *UploadHandler) UploadSubtitle(c *gin.Context) {
+	videoUUID := c.Param("uuid")
+
+	langCode := c.PostForm("language_code")
+	label := c.PostForm("label")
+	if langCode == "" || label == "" {
+		response.BadRequest(c, "language_code and label are required")
+		return
+	}
+
+	file, header, err := c.Request.FormFile("file")
+	if err != nil {
+		response.BadRequest(c, "file is required")
+		return
+	}
+	defer file.Close()
+
+	s3Key := fmt.Sprintf("videos/%s/subtitles/%s_%s", videoUUID, langCode, header.Filename)
+
+	if err := h.s3.Upload(c.Request.Context(), s3Key, io.Reader(file), "text/vtt"); err != nil {
+		response.InternalError(c, "failed to upload subtitle: "+err.Error())
+		return
+	}
+
+	sub := &model.Subtitle{
+		LanguageCode: langCode,
+		Label:        label,
+		S3Key:        s3Key,
+	}
+	if err := h.videoSvc.CreateSubtitle(videoUUID, sub); err != nil {
+		response.InternalError(c, err.Error())
+		return
+	}
+
+	response.Created(c, sub)
 }
