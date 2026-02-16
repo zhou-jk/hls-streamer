@@ -4,26 +4,26 @@ server:
   mode: debug
 
 database:
-  host: localhost
+  host: mysql
   port: 3306
   name: hls_streamer
   user: root
-  password: ""
+  password: "BarTn0qluW17Rs5K"
   max_open_conns: 50
   max_idle_conns: 10
 
 redis:
-  addr: localhost:6379
+  addr: redis:6379
   password: ""
   db: 0
 
 s3:
-  endpoint: ""
+  endpoint: "http://minio:9000"
   region: us-east-1
   bucket: hls-videos
-  access_key: ""
-  secret_key: ""
-  use_path_style: false
+  access_key: "minioadmin"
+  secret_key: "minioadmin"
+  use_path_style: true
 
 jwt:
   secret: "change-me-in-production"

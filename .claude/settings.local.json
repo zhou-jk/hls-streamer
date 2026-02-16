@@ -2,7 +2,15 @@
   "permissions": {
     "allow": [
       "Bash(go mod tidy:*)",
-      "Bash(go build:*)"
+      "Bash(go build:*)",
+      "Bash(export PATH=\"/c/Program Files/Go/bin:$PATH\":*)",
+      "Bash(where.exe:*)",
+      "Bash(docker:*)",
+      "Bash(docker compose:*)",
+      "Bash(\"/c/Program Files/Docker/Docker/resources/bin/docker.exe\" compose up -d)",
+      "Bash(export PATH=\"/c/Program Files/nodejs:$PATH\")",
+      "Bash(npm install:*)",
+      "Bash(npm run build:*)"
     ]
   }
 }
