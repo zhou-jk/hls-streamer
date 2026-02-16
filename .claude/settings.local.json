@@ -11,7 +11,8 @@
       "Bash(export PATH=\"/c/Program Files/nodejs:$PATH\")",
       "Bash(npm install:*)",
       "Bash(npm run build:*)",
-      "Bash(go vet:*)"
+      "Bash(go vet:*)",
+      "Bash(npx tsc:*)"
     ]
   }
 }

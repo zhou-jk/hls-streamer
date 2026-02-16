@@ -1,7 +1,8 @@
-import { useEffect, useState, useRef } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useEffect, useState, useRef, useCallback } from 'react';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import { Tabs, Descriptions, Tag, Button, Form, Input, Select, Table, Space, Card, message, Popconfirm, Progress, Upload, Switch, Image } from 'antd';
-import { ArrowLeftOutlined, UploadOutlined, InboxOutlined, CopyOutlined, DownloadOutlined } from '@ant-design/icons';
+import { ArrowLeftOutlined, UploadOutlined, InboxOutlined, CopyOutlined, DownloadOutlined, PlayCircleOutlined } from '@ant-design/icons';
+import Hls from 'hls.js';
 import { videosApi } from '../../api/videos';
 import type { Video, VideoTranslation, VideoVariant, Thumbnail, Subtitle, TranscodeTask } from '../../types';
 import axios from 'axios';
@@ -38,6 +39,53 @@ export default function VideoDetail() {
   const [uploadDetail, setUploadDetail] = useState({ uploaded: 0, total: 0, speed: 0, part: 0, partCount: 0 });
   const [subUploading, setSubUploading] = useState(false);
   const subFileRef = useRef<File | null>(null);
+  const previewRef = useRef<HTMLVideoElement>(null);
+  const previewHlsRef = useRef<Hls | null>(null);
+
+  const initPreviewPlayer = useCallback(() => {
+    if (!video || video.status !== 'ready' || !previewRef.current) return;
+    // Already initialized
+    if (previewHlsRef.current) return;
+
+    const src = `/play/${video.uuid}/master.m3u8`;
+    if (Hls.isSupported()) {
+      const hls = new Hls({ startLevel: -1, capLevelToPlayerSize: true });
+      previewHlsRef.current = hls;
+      hls.loadSource(src);
+      hls.attachMedia(previewRef.current);
+      hls.on(Hls.Events.ERROR, (_event, data) => {
+        if (data.fatal) {
+          if (data.type === Hls.ErrorTypes.NETWORK_ERROR) hls.startLoad();
+          else if (data.type === Hls.ErrorTypes.MEDIA_ERROR) hls.recoverMediaError();
+          else hls.destroy();
+        }
+      });
+    } else if (previewRef.current.canPlayType('application/vnd.apple.mpegurl')) {
+      previewRef.current.src = src;
+    }
+
+    // Add subtitle tracks
+    const el = previewRef.current;
+    (video.subtitles || []).forEach((sub: Subtitle) => {
+      const track = document.createElement('track');
+      track.kind = 'subtitles';
+      track.label = sub.label;
+      track.srclang = sub.language_code;
+      track.src = `/play/${video.uuid}/subtitles/${sub.language_code}.vtt`;
+      if (sub.is_default) track.default = true;
+      el.appendChild(track);
+    });
+  }, [video]);
+
+  // Cleanup HLS on unmount
+  useEffect(() => {
+    return () => {
+      if (previewHlsRef.current) {
+        previewHlsRef.current.destroy();
+        previewHlsRef.current = null;
+      }
+    };
+  }, []);
 
   const formatSize = (bytes: number) => {
     if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
@@ -223,6 +271,44 @@ export default function VideoDetail() {
                 <Form.Item name="rating" label="评级"><Input style={{ width: 80 }} /></Form.Item>
                 <Form.Item><Button type="primary" htmlType="submit">保存</Button></Form.Item>
               </Form>
+            </Card>
+          ),
+        },
+        {
+          key: 'preview', label: '预览播放',
+          children: (
+            <Card>
+              {video.status === 'ready' ? (
+                <div>
+                  <div style={{ background: '#000', borderRadius: 8, overflow: 'hidden', marginBottom: 16 }}>
+                    <video
+                      ref={(el) => {
+                        (previewRef as React.MutableRefObject<HTMLVideoElement | null>).current = el;
+                        if (el) initPreviewPlayer();
+                      }}
+                      controls
+                      style={{ width: '100%', maxHeight: 500, display: 'block' }}
+                      crossOrigin="anonymous"
+                    />
+                  </div>
+                  <Space>
+                    <Link to={`/player/${video.uuid}`}>
+                      <Button icon={<PlayCircleOutlined />}>全屏播放器</Button>
+                    </Link>
+                    <Button icon={<DownloadOutlined />} href={`/play/${video.uuid}/download`} target="_blank">下载原片</Button>
+                    <Button icon={<CopyOutlined />} onClick={() => {
+                      const url = `${window.location.origin}/play/${video.uuid}/master.m3u8`;
+                      navigator.clipboard.writeText(url);
+                      message.success('播放地址已复制');
+                    }}>复制播放地址</Button>
+                  </Space>
+                </div>
+              ) : (
+                <div style={{ textAlign: 'center', padding: 60, color: '#999' }}>
+                  <PlayCircleOutlined style={{ fontSize: 48, marginBottom: 16 }} />
+                  <p>视频状态: {video.status}，转码完成后可预览</p>
+                </div>
+              )}
             </Card>
           ),
         },

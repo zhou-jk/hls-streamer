@@ -9,6 +9,7 @@ import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import VideoList from './pages/videos/VideoList';
 import VideoDetail from './pages/videos/VideoDetail';
+import VideoPlayer from './pages/videos/VideoPlayer';
 import UserList from './pages/users/UserList';
 import CategoryList from './pages/categories/CategoryList';
 import TaskList from './pages/tasks/TaskList';
@@ -22,6 +23,7 @@ export default function App() {
       <BrowserRouter>
         <Routes>
           <Route path="/login" element={<Login />} />
+          <Route path="/player/:uuid" element={<PrivateRoute><VideoPlayer /></PrivateRoute>} />
           <Route path="/" element={<PrivateRoute><AppLayout /></PrivateRoute>}>
             <Route index element={<Dashboard />} />
             <Route path="videos" element={<VideoList />} />
