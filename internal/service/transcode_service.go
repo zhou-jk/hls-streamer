@@ -408,7 +408,7 @@ func (s *TranscodeService) checkAndBuildMasterPlaylist(videoID uint, videoUUID s
 			Bandwidth:    int(v.BitrateKbps) * 1000,
 			Width:        int(v.Width),
 			Height:       int(v.Height),
-			PlaylistPath: fmt.Sprintf("%s/playlist.m3u8", v.ResolutionName),
+			PlaylistPath: fmt.Sprintf("variants/%s/playlist.m3u8", v.ResolutionName),
 		}
 	}
 	masterContent := hls.GenerateMasterPlaylist(variantInfos)
@@ -427,6 +427,37 @@ func (s *TranscodeService) checkAndBuildMasterPlaylist(videoID uint, videoUUID s
 	video.MasterPlaylistKey = &masterKey
 	video.Status = "ready"
 	_ = s.videoRepo.Update(video)
+}
+
+// DeleteVariants removes all variants for a video from DB and S3, resets video status.
+func (s *TranscodeService) DeleteVariants(ctx context.Context, videoUUID string) error {
+	video, err := s.videoRepo.FindByUUID(videoUUID)
+	if err != nil {
+		return fmt.Errorf("video not found: %w", err)
+	}
+
+	// Delete variant files from S3
+	s3Prefix := fmt.Sprintf("videos/%s/variants/", videoUUID)
+	if err := s.s3.DeletePrefix(ctx, s3Prefix); err != nil {
+		return fmt.Errorf("delete S3 variants: %w", err)
+	}
+
+	// Delete master playlist from S3
+	if video.MasterPlaylistKey != nil {
+		_ = s.s3.Delete(ctx, *video.MasterPlaylistKey)
+	}
+
+	// Delete variant records from DB
+	if err := s.videoRepo.DeleteVariants(video.ID); err != nil {
+		return fmt.Errorf("delete variant records: %w", err)
+	}
+
+	// Reset video status to uploaded (if it was ready/processing/error)
+	video.MasterPlaylistKey = nil
+	if video.Status == "ready" || video.Status == "processing" || video.Status == "error" {
+		video.Status = "uploaded"
+	}
+	return s.videoRepo.Update(video)
 }
 
 func (s *TranscodeService) FailTask(taskUUID, errMsg string) error {

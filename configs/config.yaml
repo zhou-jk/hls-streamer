@@ -25,6 +25,7 @@ s3:
   access_key: "minioadmin"
   secret_key: "minioadmin"
   use_path_style: true
+  public_read: false
 
 jwt:
   secret: "change-me-in-production"

@@ -61,6 +61,7 @@ type S3Config struct {
 	AccessKey      string `yaml:"access_key"`
 	SecretKey      string `yaml:"secret_key"`
 	UsePathStyle   bool   `yaml:"use_path_style"`
+	PublicRead     bool   `yaml:"public_read"` // if true, objects are uploaded with public-read ACL and served via direct URLs
 }
 
 type JWTConfig struct {

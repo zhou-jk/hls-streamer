@@ -91,6 +91,7 @@ func Setup(cfg *config.Config, h Handlers) *gin.Engine {
 
 			// Variants
 			videos.GET("/:uuid/variants", h.Video.ListVariants)
+			videos.DELETE("/:uuid/variants", h.Transcode.DeleteVariants)
 
 			// Thumbnails
 			videos.GET("/:uuid/thumbnails", h.Video.ListThumbnails)

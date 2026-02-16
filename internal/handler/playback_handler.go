@@ -21,6 +21,20 @@ func NewPlaybackHandler(videoRepo *repository.VideoRepo, s3 *storage.S3Client) *
 	return &PlaybackHandler{videoRepo: videoRepo, s3: s3}
 }
 
+// redirectToS3 redirects to a public URL or presigned URL depending on config.
+func (h *PlaybackHandler) redirectToS3(c *gin.Context, s3Key string) {
+	if h.s3.IsPublicRead() {
+		c.Redirect(http.StatusTemporaryRedirect, h.s3.PublicURL(s3Key))
+		return
+	}
+	url, err := h.s3.PresignGetObject(c.Request.Context(), s3Key, 1*time.Hour)
+	if err != nil {
+		response.NotFound(c, "object not found")
+		return
+	}
+	c.Redirect(http.StatusTemporaryRedirect, url)
+}
+
 // MasterPlaylist serves the master M3U8 playlist for a video.
 func (h *PlaybackHandler) MasterPlaylist(c *gin.Context) {
 	uuid := c.Param("uuid")
@@ -29,29 +43,14 @@ func (h *PlaybackHandler) MasterPlaylist(c *gin.Context) {
 		response.NotFound(c, "video or playlist not found")
 		return
 	}
-
-	url, err := h.s3.PresignGetObject(c.Request.Context(), *video.MasterPlaylistKey, 1*time.Hour)
-	if err != nil {
-		response.InternalError(c, "failed to generate playlist URL")
-		return
-	}
-
-	c.Redirect(http.StatusTemporaryRedirect, url)
+	h.redirectToS3(c, *video.MasterPlaylistKey)
 }
 
 // VariantPlaylist serves a variant M3U8 playlist.
 func (h *PlaybackHandler) VariantPlaylist(c *gin.Context) {
 	uuid := c.Param("uuid")
 	variant := c.Param("variant")
-
-	s3Key := fmt.Sprintf("videos/%s/variants/%s/playlist.m3u8", uuid, variant)
-	url, err := h.s3.PresignGetObject(c.Request.Context(), s3Key, 1*time.Hour)
-	if err != nil {
-		response.NotFound(c, "variant playlist not found")
-		return
-	}
-
-	c.Redirect(http.StatusTemporaryRedirect, url)
+	h.redirectToS3(c, fmt.Sprintf("videos/%s/variants/%s/playlist.m3u8", uuid, variant))
 }
 
 // Segment serves a video segment (disguised as .jpeg).
@@ -59,45 +58,21 @@ func (h *PlaybackHandler) Segment(c *gin.Context) {
 	uuid := c.Param("uuid")
 	variant := c.Param("variant")
 	segment := c.Param("segment")
-
-	s3Key := fmt.Sprintf("videos/%s/variants/%s/%s", uuid, variant, segment)
-	url, err := h.s3.PresignGetObject(c.Request.Context(), s3Key, 1*time.Hour)
-	if err != nil {
-		response.NotFound(c, "segment not found")
-		return
-	}
-
-	c.Redirect(http.StatusTemporaryRedirect, url)
+	h.redirectToS3(c, fmt.Sprintf("videos/%s/variants/%s/%s", uuid, variant, segment))
 }
 
 // SubtitleFile serves a WebVTT subtitle file.
 func (h *PlaybackHandler) SubtitleFile(c *gin.Context) {
 	uuid := c.Param("uuid")
 	lang := c.Param("lang")
-
-	s3Key := fmt.Sprintf("videos/%s/subtitles/%s.vtt", uuid, lang)
-	url, err := h.s3.PresignGetObject(c.Request.Context(), s3Key, 1*time.Hour)
-	if err != nil {
-		response.NotFound(c, "subtitle not found")
-		return
-	}
-
-	c.Redirect(http.StatusTemporaryRedirect, url)
+	h.redirectToS3(c, fmt.Sprintf("videos/%s/subtitles/%s.vtt", uuid, lang))
 }
 
 // ThumbnailImage serves a thumbnail image.
 func (h *PlaybackHandler) ThumbnailImage(c *gin.Context) {
 	uuid := c.Param("uuid")
 	filename := c.Param("filename")
-
-	s3Key := fmt.Sprintf("videos/%s/thumbnails/%s", uuid, filename)
-	url, err := h.s3.PresignGetObject(c.Request.Context(), s3Key, 1*time.Hour)
-	if err != nil {
-		response.NotFound(c, "thumbnail not found")
-		return
-	}
-
-	c.Redirect(http.StatusTemporaryRedirect, url)
+	h.redirectToS3(c, fmt.Sprintf("videos/%s/thumbnails/%s", uuid, filename))
 }
 
 // DownloadOriginal redirects to a presigned URL for downloading the original video file.
@@ -108,12 +83,5 @@ func (h *PlaybackHandler) DownloadOriginal(c *gin.Context) {
 		response.NotFound(c, "video not found")
 		return
 	}
-
-	url, err := h.s3.PresignGetObject(c.Request.Context(), video.OriginalS3Key, 1*time.Hour)
-	if err != nil {
-		response.InternalError(c, "failed to generate download URL")
-		return
-	}
-
-	c.Redirect(http.StatusTemporaryRedirect, url)
+	h.redirectToS3(c, video.OriginalS3Key)
 }

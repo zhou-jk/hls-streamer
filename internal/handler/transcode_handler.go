@@ -95,6 +95,18 @@ func (h *TranscodeHandler) GenerateThumbnails(c *gin.Context) {
 	response.Created(c, task)
 }
 
+// DeleteVariants removes all generated variants for a video.
+func (h *TranscodeHandler) DeleteVariants(c *gin.Context) {
+	uuid := c.Param("uuid")
+
+	if err := h.transcodeSvc.DeleteVariants(c.Request.Context(), uuid); err != nil {
+		response.InternalError(c, err.Error())
+		return
+	}
+
+	response.OK(c, gin.H{"message": "variants deleted"})
+}
+
 // CancelTask cancels a pending or queued task.
 func (h *TranscodeHandler) CancelTask(c *gin.Context) {
 	taskUUID := c.Param("task_uuid")

@@ -16,9 +16,11 @@ import (
 )
 
 type S3Client struct {
-	client       *s3.Client
+	client        *s3.Client
 	presignClient *s3.Client // uses public endpoint for browser-facing presigned URLs
-	bucket       string
+	bucket        string
+	publicRead    bool   // if true, uploads use public-read ACL
+	publicBaseURL string // base URL for direct public access (e.g. "http://minio:9000/bucket")
 }
 
 func NewS3Client(cfg config.S3Config) (*S3Client, error) {
@@ -62,7 +64,28 @@ func NewS3Client(cfg config.S3Config) (*S3Client, error) {
 		client:        client,
 		presignClient: presignClient,
 		bucket:        cfg.Bucket,
+		publicRead:    cfg.PublicRead,
+		publicBaseURL: buildPublicBaseURL(cfg),
 	}, nil
+}
+
+// buildPublicBaseURL constructs the base URL for direct public object access.
+func buildPublicBaseURL(cfg config.S3Config) string {
+	endpoint := cfg.PublicEndpoint
+	if endpoint == "" {
+		endpoint = cfg.Endpoint
+	}
+	if endpoint == "" {
+		return ""
+	}
+	// Remove trailing slash
+	for len(endpoint) > 0 && endpoint[len(endpoint)-1] == '/' {
+		endpoint = endpoint[:len(endpoint)-1]
+	}
+	if cfg.UsePathStyle {
+		return fmt.Sprintf("%s/%s", endpoint, cfg.Bucket)
+	}
+	return endpoint
 }
 
 func (s *S3Client) Upload(ctx context.Context, key string, body io.Reader, contentType string) error {
@@ -71,6 +94,9 @@ func (s *S3Client) Upload(ctx context.Context, key string, body io.Reader, conte
 		Key:         aws.String(key),
 		Body:        body,
 		ContentType: aws.String(contentType),
+	}
+	if s.publicRead {
+		input.ACL = s3types.ObjectCannedACLPublicRead
 	}
 	_, err := s.client.PutObject(ctx, input)
 	return err
@@ -200,4 +226,14 @@ func (s *S3Client) GetClient() *s3.Client {
 // GetBucket returns the configured bucket name.
 func (s *S3Client) GetBucket() string {
 	return s.bucket
+}
+
+// IsPublicRead returns whether the bucket is configured for public-read access.
+func (s *S3Client) IsPublicRead() bool {
+	return s.publicRead
+}
+
+// PublicURL returns a direct public URL for the given key (only useful when public_read is true).
+func (s *S3Client) PublicURL(key string) string {
+	return fmt.Sprintf("%s/%s", s.publicBaseURL, key)
 }

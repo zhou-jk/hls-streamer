@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { Tabs, Descriptions, Tag, Button, Form, Input, Select, Table, Space, Card, message, Popconfirm, Progress, Upload, Switch, Image } from 'antd';
-import { ArrowLeftOutlined, UploadOutlined, InboxOutlined, CopyOutlined, DownloadOutlined, PlayCircleOutlined } from '@ant-design/icons';
+import { ArrowLeftOutlined, UploadOutlined, InboxOutlined, CopyOutlined, DownloadOutlined, PlayCircleOutlined, DeleteOutlined } from '@ant-design/icons';
 import Hls from 'hls.js';
 import { videosApi } from '../../api/videos';
 import type { Video, VideoTranslation, VideoVariant, Thumbnail, Subtitle, TranscodeTask } from '../../types';
@@ -400,6 +400,11 @@ export default function VideoDetail() {
               </Form>
 
               <h4>变体</h4>
+              {(video.variants || []).length > 0 && (
+                <Popconfirm title="确认删除所有变体？这将删除所有已转码的文件。" onConfirm={async () => { await videosApi.deleteVariants(video.uuid); message.success('变体已删除'); load(); }}>
+                  <Button danger icon={<DeleteOutlined />} style={{ marginBottom: 12 }}>删除所有变体</Button>
+                </Popconfirm>
+              )}
               <Table
                 dataSource={video.variants || []}
                 rowKey="id"

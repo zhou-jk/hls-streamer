@@ -138,6 +138,10 @@ func (r *VideoRepo) ListVariants(videoID uint) ([]model.VideoVariant, error) {
 	return variants, err
 }
 
+func (r *VideoRepo) DeleteVariants(videoID uint) error {
+	return r.db.Where("video_id = ?", videoID).Delete(&model.VideoVariant{}).Error
+}
+
 // Thumbnail operations
 
 func (r *VideoRepo) CreateThumbnail(t *model.Thumbnail) error {

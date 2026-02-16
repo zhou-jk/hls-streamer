@@ -51,6 +51,9 @@ export const videosApi = {
   listVariants: (uuid: string) =>
     client.get<ApiResponse<VideoVariant[]>>(`/api/v1/videos/${uuid}/variants`),
 
+  deleteVariants: (uuid: string) =>
+    client.delete(`/api/v1/videos/${uuid}/variants`),
+
   // Thumbnails
   listThumbnails: (uuid: string) =>
     client.get<ApiResponse<Thumbnail[]>>(`/api/v1/videos/${uuid}/thumbnails`),
