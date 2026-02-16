@@ -100,6 +100,14 @@ func (r *TaskRepo) CountPendingByVideo(videoID uint) (int64, error) {
 	return count, err
 }
 
+// FindCompletedWithResult returns completed tasks of the given type that have a non-null result.
+func (r *TaskRepo) FindCompletedWithResult(taskType string) ([]model.TranscodeTask, error) {
+	var tasks []model.TranscodeTask
+	err := r.db.Where("type = ? AND status = ? AND result IS NOT NULL", taskType, "completed").
+		Find(&tasks).Error
+	return tasks, err
+}
+
 // TaskListParams holds filters for the global task list.
 type TaskListParams struct {
 	Page    int

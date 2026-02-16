@@ -433,6 +433,41 @@ func (s *TranscodeService) GenerateThumbnails(ctx context.Context, videoUUID str
 	return s.StartThumbnailGeneration(ctx, videoUUID, count, width, height)
 }
 
+// ReprocessPendingResults finds completed probe/thumbnail tasks where the video
+// metadata was never applied (e.g. tasks completed before the post-processing
+// code was deployed) and reprocesses them.
+func (s *TranscodeService) ReprocessPendingResults() {
+	// Reprocess probe results for videos still missing metadata
+	probeTasks, err := s.taskRepo.FindCompletedWithResult("probe")
+	if err != nil {
+		return
+	}
+	for _, task := range probeTasks {
+		video, err := s.videoRepo.FindByID(task.VideoID)
+		if err != nil || video == nil {
+			continue
+		}
+		// Skip if metadata already populated
+		if video.DurationSeconds != nil && video.Width != nil {
+			continue
+		}
+		s.handleProbeResult(&task, task.Result)
+	}
+
+	// Reprocess thumbnail results for videos with no thumbnails
+	thumbTasks, err := s.taskRepo.FindCompletedWithResult("thumbnail")
+	if err != nil {
+		return
+	}
+	for _, task := range thumbTasks {
+		thumbs, _ := s.videoRepo.ListThumbnails(task.VideoID)
+		if len(thumbs) > 0 {
+			continue
+		}
+		s.handleThumbnailResult(&task, task.Result)
+	}
+}
+
 // CheckVideoComplete checks if all tasks for a video are done and updates status.
 func (s *TranscodeService) CheckVideoComplete(videoID uint, videoUUID string) error {
 	pending, err := s.taskRepo.CountPendingByVideo(videoID)

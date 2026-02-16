@@ -139,6 +139,9 @@ func main() {
 		Playback:  handler.NewPlaybackHandler(videoRepo, s3Client),
 	}
 
+	// Reprocess any completed tasks whose results were never applied
+	transcodeSvc.ReprocessPendingResults()
+
 	// Router
 	r := router.Setup(cfg, handlers)
 
