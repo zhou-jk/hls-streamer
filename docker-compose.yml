@@ -82,12 +82,13 @@ services:
       context: .
       target: worker
     container_name: hls-worker
+    command: ["-config", "/etc/hls-streamer/config.yaml", "-api", "http://api:8080"]
     volumes:
       - ./configs:/etc/hls-streamer:ro
       - worker_tmp:/tmp/hls-worker
     depends_on:
-      mysql:
-        condition: service_healthy
+      api:
+        condition: service_started
       redis:
         condition: service_healthy
       minio-init:
