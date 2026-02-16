@@ -171,6 +171,50 @@ func (f *FFmpeg) ExtractThumbnails(ctx context.Context, input, outputDir string,
 	return nil
 }
 
+// TranscodeMP4Params contains parameters for MP4 transcoding (used as intermediate for DRM packaging).
+type TranscodeMP4Params struct {
+	Input        string
+	Output       string
+	Width        int
+	Height       int
+	VideoBitrate int // kbps
+	AudioBitrate int // kbps
+	Codec        string
+}
+
+// TranscodeToMP4 transcodes the input to a single MP4 file (used before Shaka Packager for DRM).
+func (f *FFmpeg) TranscodeToMP4(ctx context.Context, p TranscodeMP4Params) error {
+	codec := "libx264"
+	if p.Codec == "h265" || p.Codec == "hevc" {
+		codec = "libx265"
+	}
+
+	args := []string{
+		"-i", p.Input,
+		"-c:v", codec,
+		"-b:v", fmt.Sprintf("%dk", p.VideoBitrate),
+		"-c:a", "aac",
+		"-b:a", fmt.Sprintf("%dk", p.AudioBitrate),
+		"-vf", fmt.Sprintf("scale=%d:%d", p.Width, p.Height),
+		"-preset", "medium",
+		"-movflags", "+faststart",
+		"-y",
+	}
+
+	if f.threads > 0 {
+		args = append([]string{"-threads", fmt.Sprintf("%d", f.threads)}, args...)
+	}
+
+	args = append(args, p.Output)
+
+	cmd := exec.CommandContext(ctx, f.ffmpegPath, args...)
+	if output, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("ffmpeg transcode mp4: %w\noutput: %s", err, string(output))
+	}
+
+	return nil
+}
+
 func parseFrameRate(rate string) float64 {
 	parts := strings.Split(rate, "/")
 	if len(parts) != 2 {

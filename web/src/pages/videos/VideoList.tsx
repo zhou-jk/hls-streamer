@@ -6,7 +6,7 @@ import { videosApi } from '../../api/videos';
 import type { Video, PaginationMeta } from '../../types';
 
 const statusColors: Record<string, string> = {
-  draft: 'default', processing: 'processing', ready: 'success', error: 'error', archived: 'warning',
+  draft: 'default', uploaded: 'blue', processing: 'processing', ready: 'success', error: 'error', archived: 'warning',
 };
 
 export default function VideoList() {

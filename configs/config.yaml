@@ -39,9 +39,7 @@ ffmpeg:
 shaka:
   path: packager
 
-drm:
-  fairplay_cert_path: ""
-  fairplay_key_path: ""
+drm: {}
 
 worker:
   id: ""

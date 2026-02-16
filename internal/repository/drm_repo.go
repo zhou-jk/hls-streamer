@@ -17,10 +17,13 @@ func (r *DRMRepo) Create(key *model.DRMKey) error {
 	return r.db.Create(key).Error
 }
 
-func (r *DRMRepo) FindByVideoID(videoID uint) ([]model.DRMKey, error) {
-	var keys []model.DRMKey
-	err := r.db.Where("video_id = ?", videoID).Find(&keys).Error
-	return keys, err
+func (r *DRMRepo) FindByVideoID(videoID uint) (*model.DRMKey, error) {
+	var key model.DRMKey
+	err := r.db.Where("video_id = ?", videoID).First(&key).Error
+	if err != nil {
+		return nil, err
+	}
+	return &key, nil
 }
 
 func (r *DRMRepo) FindByKeyID(keyID string) (*model.DRMKey, error) {
@@ -32,11 +35,6 @@ func (r *DRMRepo) FindByKeyID(keyID string) (*model.DRMKey, error) {
 	return &key, nil
 }
 
-func (r *DRMRepo) FindByVideoAndSystem(videoID uint, system string) (*model.DRMKey, error) {
-	var key model.DRMKey
-	err := r.db.Where("video_id = ? AND drm_system = ?", videoID, system).First(&key).Error
-	if err != nil {
-		return nil, err
-	}
-	return &key, nil
+func (r *DRMRepo) DeleteByVideoID(videoID uint) error {
+	return r.db.Where("video_id = ?", videoID).Delete(&model.DRMKey{}).Error
 }

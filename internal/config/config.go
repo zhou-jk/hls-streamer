@@ -80,8 +80,8 @@ type ShakaConfig struct {
 }
 
 type DRMConfig struct {
-	FairPlayCertPath string `yaml:"fairplay_cert_path"`
-	FairPlayKeyPath  string `yaml:"fairplay_key_path"`
+	// Empty for now — keys are generated and stored in DB.
+	// Widevine ClearKey license is served by the API itself.
 }
 
 type WorkerConfig struct {

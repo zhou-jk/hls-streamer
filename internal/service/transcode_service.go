@@ -4,25 +4,32 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/google/uuid"
 
 	"github.com/Zhou-JK/hls-streamer/internal/model"
 	"github.com/Zhou-JK/hls-streamer/internal/queue"
 	"github.com/Zhou-JK/hls-streamer/internal/repository"
+	"github.com/Zhou-JK/hls-streamer/internal/storage"
+	"github.com/Zhou-JK/hls-streamer/pkg/hls"
 )
 
 type TranscodeService struct {
 	taskRepo  *repository.TaskRepo
 	videoRepo *repository.VideoRepo
 	producer  *queue.Producer
+	s3        *storage.S3Client
+	drmSvc    *DRMService
 }
 
-func NewTranscodeService(taskRepo *repository.TaskRepo, videoRepo *repository.VideoRepo, producer *queue.Producer) *TranscodeService {
+func NewTranscodeService(taskRepo *repository.TaskRepo, videoRepo *repository.VideoRepo, producer *queue.Producer, s3 *storage.S3Client, drmSvc *DRMService) *TranscodeService {
 	return &TranscodeService{
 		taskRepo:  taskRepo,
 		videoRepo: videoRepo,
 		producer:  producer,
+		s3:        s3,
+		drmSvc:    drmSvc,
 	}
 }
 
@@ -43,7 +50,7 @@ type ResolutionSpec struct {
 	AudioBitrate int    `json:"audio_bitrate_kbps"`
 }
 
-func (s *TranscodeService) StartTranscode(ctx context.Context, videoUUID string, req TranscodeRequest) ([]model.TranscodeTask, error) {
+func (s *TranscodeService) StartTranscode(ctx context.Context, videoUUID string, req TranscodeRequest, licenseBaseURL string) ([]model.TranscodeTask, error) {
 	video, err := s.videoRepo.FindByUUID(videoUUID)
 	if err != nil {
 		return nil, fmt.Errorf("video not found: %w", err)
@@ -51,6 +58,15 @@ func (s *TranscodeService) StartTranscode(ctx context.Context, videoUUID string,
 
 	if req.Codec == "" {
 		req.Codec = "h264"
+	}
+
+	// If DRM requested, generate keys first
+	var drmKey *model.DRMKey
+	if req.DRM && s.drmSvc != nil {
+		drmKey, err = s.drmSvc.GenerateKeys(video.ID, licenseBaseURL)
+		if err != nil {
+			return nil, fmt.Errorf("generate DRM keys: %w", err)
+		}
 	}
 
 	// Update video status
@@ -63,18 +79,27 @@ func (s *TranscodeService) StartTranscode(ctx context.Context, videoUUID string,
 			res.AudioBitrate = 128
 		}
 
-		params, _ := json.Marshal(map[string]interface{}{
-			"video_uuid":        videoUUID,
-			"video_id":          video.ID,
-			"original_s3_key":   video.OriginalS3Key,
-			"resolution":        res.Name,
-			"width":             res.Width,
-			"height":            res.Height,
-			"bitrate_kbps":      res.BitrateKbps,
+		paramMap := map[string]interface{}{
+			"video_uuid":         videoUUID,
+			"video_id":           video.ID,
+			"original_s3_key":    video.OriginalS3Key,
+			"resolution":         res.Name,
+			"width":              res.Width,
+			"height":             res.Height,
+			"bitrate_kbps":       res.BitrateKbps,
 			"audio_bitrate_kbps": res.AudioBitrate,
-			"codec":             req.Codec,
-			"drm":               req.DRM,
-		})
+			"codec":              req.Codec,
+			"drm":                req.DRM,
+		}
+
+		// Include DRM key material for the worker
+		if drmKey != nil {
+			paramMap["drm_key_id"] = drmKey.KeyID
+			paramMap["drm_content_key"] = drmKey.ContentKey
+			paramMap["drm_iv"] = drmKey.IV
+		}
+
+		params, _ := json.Marshal(paramMap)
 
 		task := model.TranscodeTask{
 			TaskUUID:    uuid.New().String(),
@@ -276,6 +301,11 @@ func (s *TranscodeService) handleProbeResult(task *model.TranscodeTask, result m
 		video.FileSizeBytes = &r.FileSize
 	}
 
+	// After probe, move from draft to uploaded (ready for transcoding)
+	if video.Status == "draft" {
+		video.Status = "uploaded"
+	}
+
 	_ = s.videoRepo.Update(video)
 }
 
@@ -370,7 +400,26 @@ func (s *TranscodeService) checkAndBuildMasterPlaylist(videoID uint, videoUUID s
 		return
 	}
 
+	// Generate master playlist content
+	variantInfos := make([]hls.VariantInfo, len(readyVariants))
+	for i, v := range readyVariants {
+		variantInfos[i] = hls.VariantInfo{
+			Name:         v.ResolutionName,
+			Bandwidth:    int(v.BitrateKbps) * 1000,
+			Width:        int(v.Width),
+			Height:       int(v.Height),
+			PlaylistPath: fmt.Sprintf("%s/playlist.m3u8", v.ResolutionName),
+		}
+	}
+	masterContent := hls.GenerateMasterPlaylist(variantInfos)
+
+	// Upload master playlist to S3
 	masterKey := fmt.Sprintf("videos/%s/master.m3u8", videoUUID)
+	if err := s.s3.Upload(context.Background(), masterKey, strings.NewReader(masterContent), "application/vnd.apple.mpegurl"); err != nil {
+		_ = s.videoRepo.UpdateStatus(videoUUID, "error")
+		return
+	}
+
 	video, err := s.videoRepo.FindByID(videoID)
 	if err != nil {
 		return

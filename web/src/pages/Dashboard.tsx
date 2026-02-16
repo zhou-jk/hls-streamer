@@ -6,7 +6,7 @@ import { workersApi } from '../api/workers';
 import type { Video, Worker } from '../types';
 
 const statusColors: Record<string, string> = {
-  draft: 'default', processing: 'processing', ready: 'success', error: 'error', archived: 'warning',
+  draft: 'default', uploaded: 'blue', processing: 'processing', ready: 'success', error: 'error', archived: 'warning',
   online: 'success', offline: 'default', busy: 'processing',
 };
 

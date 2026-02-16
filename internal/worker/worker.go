@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -19,6 +20,8 @@ import (
 	"github.com/Zhou-JK/hls-streamer/pkg/ffmpeg"
 	"github.com/Zhou-JK/hls-streamer/pkg/hls"
 )
+
+var execCommandContext = exec.CommandContext
 
 type Worker struct {
 	id       string
@@ -141,16 +144,19 @@ func (w *Worker) handleProbe(ctx context.Context, msg *queue.TaskMessage) error 
 
 func (w *Worker) handleTranscode(ctx context.Context, msg *queue.TaskMessage) error {
 	var params struct {
-		VideoUUID       string `json:"video_uuid"`
-		VideoID         uint   `json:"video_id"`
-		OriginalS3Key   string `json:"original_s3_key"`
-		Resolution      string `json:"resolution"`
-		Width           int    `json:"width"`
-		Height          int    `json:"height"`
-		BitrateKbps     int    `json:"bitrate_kbps"`
-		AudioBitrateKbps int   `json:"audio_bitrate_kbps"`
-		Codec           string `json:"codec"`
-		DRM             bool   `json:"drm"`
+		VideoUUID        string `json:"video_uuid"`
+		VideoID          uint   `json:"video_id"`
+		OriginalS3Key    string `json:"original_s3_key"`
+		Resolution       string `json:"resolution"`
+		Width            int    `json:"width"`
+		Height           int    `json:"height"`
+		BitrateKbps      int    `json:"bitrate_kbps"`
+		AudioBitrateKbps int    `json:"audio_bitrate_kbps"`
+		Codec            string `json:"codec"`
+		DRM              bool   `json:"drm"`
+		DRMKeyID         string `json:"drm_key_id"`
+		DRMContentKey    string `json:"drm_content_key"`
+		DRMIV            string `json:"drm_iv"`
 	}
 	if err := json.Unmarshal(msg.Params, &params); err != nil {
 		return fmt.Errorf("unmarshal params: %w", err)
@@ -171,17 +177,31 @@ func (w *Worker) handleTranscode(ctx context.Context, msg *queue.TaskMessage) er
 
 	w.reportProgress(msg.TaskUUID, 10)
 
-	// Transcode to HLS
+	if params.DRM && params.DRMKeyID != "" {
+		// DRM path: FFmpeg → MP4 → Shaka Packager → encrypted HLS
+		return w.transcodeDRM(ctx, msg.TaskUUID, workDir, inputFile, params.VideoUUID, params.VideoID, params.Resolution,
+			params.Width, params.Height, params.BitrateKbps, params.AudioBitrateKbps, params.Codec,
+			params.DRMKeyID, params.DRMContentKey, params.DRMIV)
+	}
+
+	// Non-DRM path: FFmpeg → HLS → rename segments → upload
+	return w.transcodeNormal(ctx, msg.TaskUUID, workDir, inputFile, params.VideoUUID, params.VideoID,
+		params.Resolution, params.Width, params.Height, params.BitrateKbps, params.AudioBitrateKbps, params.Codec)
+}
+
+func (w *Worker) transcodeNormal(ctx context.Context, taskUUID, workDir, inputFile, videoUUID string, videoID uint,
+	resolution string, width, height, bitrateKbps, audioBitrateKbps int, codec string) error {
+
 	hlsParams := ffmpeg.TranscodeHLSParams{
 		Input:           inputFile,
 		OutputDir:       workDir,
 		PlaylistName:    "playlist.m3u8",
 		SegmentPattern:  "segment_%03d.ts",
-		Width:           params.Width,
-		Height:          params.Height,
-		VideoBitrate:    params.BitrateKbps,
-		AudioBitrate:    params.AudioBitrateKbps,
-		Codec:           params.Codec,
+		Width:           width,
+		Height:          height,
+		VideoBitrate:    bitrateKbps,
+		AudioBitrate:    audioBitrateKbps,
+		Codec:           codec,
 		SegmentDuration: w.cfg.HLS.SegmentDuration,
 	}
 
@@ -189,28 +209,136 @@ func (w *Worker) handleTranscode(ctx context.Context, msg *queue.TaskMessage) er
 		return fmt.Errorf("transcode: %w", err)
 	}
 
-	w.reportProgress(msg.TaskUUID, 60)
+	w.reportProgress(taskUUID, 60)
 
 	// Rename .ts to .jpeg and rewrite playlist
 	if err := w.renameSegments(workDir, w.cfg.HLS.SegmentExtension); err != nil {
 		return fmt.Errorf("rename segments: %w", err)
 	}
 
-	w.reportProgress(msg.TaskUUID, 70)
+	w.reportProgress(taskUUID, 70)
 
 	// Upload to S3
-	s3Prefix := fmt.Sprintf("videos/%s/variants/%s", params.VideoUUID, params.Resolution)
+	s3Prefix := fmt.Sprintf("videos/%s/variants/%s", videoUUID, resolution)
 	if err := w.uploadDirectory(ctx, workDir, s3Prefix); err != nil {
 		return fmt.Errorf("upload to S3: %w", err)
 	}
 
-	w.reportProgress(msg.TaskUUID, 95)
+	w.reportProgress(taskUUID, 95)
 
 	resultJSON, _ := json.Marshal(map[string]interface{}{
-		"resolution":     params.Resolution,
+		"resolution":      resolution,
 		"playlist_s3_key": fmt.Sprintf("%s/playlist.m3u8", s3Prefix),
 	})
-	w.reportComplete(msg.TaskUUID, resultJSON, params.VideoID, params.VideoUUID)
+	w.reportComplete(taskUUID, resultJSON, videoID, videoUUID)
+	return nil
+}
+
+func (w *Worker) transcodeDRM(ctx context.Context, taskUUID, workDir, inputFile, videoUUID string, videoID uint,
+	resolution string, width, height, bitrateKbps, audioBitrateKbps int, codec string,
+	keyID, contentKey, iv string) error {
+
+	// Step 1: FFmpeg transcode to intermediate MP4 (not HLS)
+	intermediateMP4 := filepath.Join(workDir, "intermediate.mp4")
+	if err := w.ff.TranscodeToMP4(ctx, ffmpeg.TranscodeMP4Params{
+		Input:        inputFile,
+		Output:       intermediateMP4,
+		Width:        width,
+		Height:       height,
+		VideoBitrate: bitrateKbps,
+		AudioBitrate: audioBitrateKbps,
+		Codec:        codec,
+	}); err != nil {
+		return fmt.Errorf("transcode to mp4: %w", err)
+	}
+
+	w.reportProgress(taskUUID, 50)
+
+	// Step 2: Shaka Packager — package MP4 into encrypted HLS with CENC
+	outputDir := filepath.Join(workDir, "encrypted")
+	if err := os.MkdirAll(outputDir, 0755); err != nil {
+		return err
+	}
+
+	if err := w.shakaPackage(ctx, intermediateMP4, outputDir, keyID, contentKey, iv); err != nil {
+		return fmt.Errorf("shaka package: %w", err)
+	}
+
+	w.reportProgress(taskUUID, 80)
+
+	// Step 3: Upload encrypted output to S3
+	s3Prefix := fmt.Sprintf("videos/%s/variants/%s", videoUUID, resolution)
+	if err := w.uploadDirectory(ctx, outputDir, s3Prefix); err != nil {
+		return fmt.Errorf("upload to S3: %w", err)
+	}
+
+	w.reportProgress(taskUUID, 95)
+
+	resultJSON, _ := json.Marshal(map[string]interface{}{
+		"resolution":      resolution,
+		"playlist_s3_key": fmt.Sprintf("%s/playlist.m3u8", s3Prefix),
+		"drm":             true,
+	})
+	w.reportComplete(taskUUID, resultJSON, videoID, videoUUID)
+	return nil
+}
+
+// shakaPackage uses Shaka Packager to encrypt an MP4 into HLS with CENC (ClearKey/Widevine compatible).
+func (w *Worker) shakaPackage(ctx context.Context, inputMP4, outputDir, keyID, contentKey, iv string) error {
+	playlistPath := filepath.Join(outputDir, "playlist.m3u8")
+	segmentTemplate := filepath.Join(outputDir, "segment_$Number$.ts")
+
+	// Build Shaka Packager command
+	// Format: packager 'in=input.mp4,stream=audio,segment_template=...,playlist_name=...'
+	//                   'in=input.mp4,stream=video,segment_template=...,playlist_name=...'
+	//         --enable_raw_key_encryption --keys key_id=...:key=... --iv ...
+	//         --hls_master_playlist_output playlist.m3u8
+	//         --protection_scheme cenc
+
+	streamDesc := fmt.Sprintf(
+		"in=%s,stream=audio,segment_template=%s,playlist_name=audio.m3u8,hls_group_id=audio,hls_name=audio",
+		inputMP4, filepath.Join(outputDir, "audio_$Number$.ts"),
+	)
+	videoDesc := fmt.Sprintf(
+		"in=%s,stream=video,segment_template=%s,playlist_name=video.m3u8",
+		inputMP4, segmentTemplate,
+	)
+
+	args := []string{
+		streamDesc,
+		videoDesc,
+		"--enable_raw_key_encryption",
+		"--keys", fmt.Sprintf("key_id=%s:key=%s", keyID, contentKey),
+		"--iv", iv,
+		"--protection_scheme", "cenc",
+		"--hls_master_playlist_output", playlistPath,
+		"--segment_duration", fmt.Sprintf("%d", w.cfg.HLS.SegmentDuration),
+		"--temp_dir", w.cfg.Worker.TempDir,
+	}
+
+	slog.Info("running shaka packager", "args_count", len(args))
+
+	cmd := execCommandContext(ctx, w.cfg.Shaka.Path, args...)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("shaka packager failed: %w\noutput: %s", err, string(output))
+	}
+
+	// Shaka outputs a master playlist and segment files.
+	// We need to use the video playlist as our "playlist.m3u8" for the variant.
+	// Rename video.m3u8 → playlist.m3u8 (overwrite the master that Shaka created)
+	videoPlaylist := filepath.Join(outputDir, "video.m3u8")
+	if _, err := os.Stat(videoPlaylist); err == nil {
+		data, err := os.ReadFile(videoPlaylist)
+		if err == nil {
+			_ = os.WriteFile(playlistPath, data, 0644)
+		}
+		os.Remove(videoPlaylist)
+	}
+
+	// Remove audio playlist (audio is muxed in the video segments for HLS)
+	os.Remove(filepath.Join(outputDir, "audio.m3u8"))
+
 	return nil
 }
 

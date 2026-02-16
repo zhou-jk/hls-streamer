@@ -109,6 +109,7 @@ func Setup(cfg *config.Config, h Handlers) *gin.Engine {
 
 			// DRM
 			videos.POST("/:uuid/drm/keys", h.DRM.GenerateKeys)
+			videos.GET("/:uuid/drm/keys", h.DRM.GetKeys)
 		}
 
 		// Categories
@@ -151,9 +152,7 @@ func Setup(cfg *config.Config, h Handlers) *gin.Engine {
 	// DRM License endpoints (public, called by players)
 	drm := api.Group("/drm")
 	{
-		drm.POST("/widevine/license", h.DRM.WidevineLicense)
-		drm.POST("/fairplay/certificate", h.DRM.FairPlayCertificate)
-		drm.POST("/fairplay/license", h.DRM.FairPlayLicense)
+		drm.POST("/clearkey/license", h.DRM.ClearKeyLicense)
 	}
 
 	// Playback endpoints (public or token-gated)

@@ -23,7 +23,7 @@ export default function VideoPlayer() {
   }, [uuid]);
 
   useEffect(() => {
-    if (!video || video.status !== 'ready' || !videoRef.current) return;
+    if (!video || !video.master_playlist_key || !videoRef.current) return;
 
     const src = `/play/${video.uuid}/master.m3u8`;
 
@@ -151,7 +151,7 @@ export default function VideoPlayer() {
       </div>
 
       <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        {video?.status === 'ready' ? (
+        {video?.master_playlist_key ? (
           <video
             ref={videoRef}
             controls

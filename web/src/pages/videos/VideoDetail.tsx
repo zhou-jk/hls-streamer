@@ -10,7 +10,7 @@ import axios from 'axios';
 const { Dragger } = Upload;
 
 const statusColors: Record<string, string> = {
-  draft: 'default', processing: 'processing', ready: 'success', error: 'error', archived: 'warning',
+  draft: 'default', uploaded: 'blue', processing: 'processing', ready: 'success', error: 'error', archived: 'warning',
   pending: 'default', queued: 'cyan', completed: 'success', failed: 'error', cancelled: 'warning',
 };
 
@@ -43,7 +43,7 @@ export default function VideoDetail() {
   const previewHlsRef = useRef<Hls | null>(null);
 
   const initPreviewPlayer = useCallback(() => {
-    if (!video || video.status !== 'ready' || !previewRef.current) return;
+    if (!video || !video.master_playlist_key || !previewRef.current) return;
     // Already initialized
     if (previewHlsRef.current) return;
 
@@ -179,9 +179,9 @@ export default function VideoDetail() {
     }
   };
 
-  const handleTranscode = async (values: { resolutions: string[]; codec: string }) => {
+  const handleTranscode = async (values: { resolutions: string[]; codec: string; drm: boolean }) => {
     const resolutions = PRESETS.filter((p) => values.resolutions.includes(p.name));
-    await videosApi.startTranscode(video.uuid, { resolutions, codec: values.codec || 'h264' });
+    await videosApi.startTranscode(video.uuid, { resolutions, codec: values.codec || 'h264', drm: values.drm || false });
     message.success('转码任务已创建');
     load();
   };
@@ -246,7 +246,7 @@ export default function VideoDetail() {
                   <Switch checked={video.is_public} onChange={async (checked) => { await videosApi.update(video.uuid, { is_public: checked }); message.success('已更新'); load(); }} />
                 </Descriptions.Item>
                 <Descriptions.Item label="播放次数">{video.view_count}</Descriptions.Item>
-                {video.status === 'ready' && (
+                {video.master_playlist_key && (
                   <Descriptions.Item label="播放地址">
                     <Space>
                       <a href={`/play/${video.uuid}/master.m3u8`} target="_blank" rel="noreferrer">/play/{video.uuid}/master.m3u8</a>
@@ -278,7 +278,7 @@ export default function VideoDetail() {
           key: 'preview', label: '预览播放',
           children: (
             <Card>
-              {video.status === 'ready' ? (
+              {video.master_playlist_key ? (
                 <div>
                   <div style={{ background: '#000', borderRadius: 8, overflow: 'hidden', marginBottom: 16 }}>
                     <video
@@ -392,6 +392,9 @@ export default function VideoDetail() {
                 </Form.Item>
                 <Form.Item name="codec" label="编码" initialValue="h264">
                   <Select style={{ width: 100 }} options={[{ value: 'h264' }, { value: 'h265' }]} />
+                </Form.Item>
+                <Form.Item name="drm" label="DRM加密" valuePropName="checked" initialValue={false}>
+                  <Switch />
                 </Form.Item>
                 <Form.Item><Button type="primary" htmlType="submit">开始转码</Button></Form.Item>
               </Form>

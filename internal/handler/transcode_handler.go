@@ -27,7 +27,14 @@ func (h *TranscodeHandler) StartTranscode(c *gin.Context) {
 		return
 	}
 
-	tasks, err := h.transcodeSvc.StartTranscode(c.Request.Context(), uuid, input)
+	// Build license base URL for DRM key generation
+	scheme := "http"
+	if c.Request.TLS != nil {
+		scheme = "https"
+	}
+	licenseBaseURL := scheme + "://" + c.Request.Host
+
+	tasks, err := h.transcodeSvc.StartTranscode(c.Request.Context(), uuid, input, licenseBaseURL)
 	if err != nil {
 		response.InternalError(c, err.Error())
 		return

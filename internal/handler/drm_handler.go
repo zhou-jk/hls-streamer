@@ -1,6 +1,9 @@
 package handler
 
 import (
+	"encoding/base64"
+	"encoding/hex"
+
 	"github.com/gin-gonic/gin"
 
 	"github.com/Zhou-JK/hls-streamer/internal/service"
@@ -31,70 +34,92 @@ func (h *DRMHandler) GenerateKeys(c *gin.Context) {
 	}
 	baseURL := scheme + "://" + c.Request.Host
 
-	keys, err := h.drmSvc.GenerateKeys(video.ID, baseURL)
+	key, err := h.drmSvc.GenerateKeys(video.ID, baseURL)
 	if err != nil {
 		response.InternalError(c, err.Error())
 		return
 	}
 
-	response.Created(c, keys)
+	response.Created(c, key)
 }
 
-// WidevineLicense handles Widevine license requests.
-// In production, this would integrate with a proper Widevine license server.
-func (h *DRMHandler) WidevineLicense(c *gin.Context) {
-	// Widevine license protocol is binary (protobuf).
-	// A full implementation requires the Widevine SDK.
-	// This is a placeholder that returns the content key for development.
-	var input struct {
-		KeyID string `json:"key_id" binding:"required"`
-	}
-	if err := c.ShouldBindJSON(&input); err != nil {
-		response.BadRequest(c, err.Error())
-		return
-	}
-
-	key, err := h.drmSvc.GetKeyByID(input.KeyID)
+// GetKeys returns the DRM key info for a video (without the content key).
+func (h *DRMHandler) GetKeys(c *gin.Context) {
+	uuid := c.Param("uuid")
+	video, err := h.videoSvc.Get(uuid)
 	if err != nil {
-		response.NotFound(c, "key not found")
+		response.NotFound(c, "video not found")
 		return
 	}
 
-	// In production: process the Widevine license request protobuf
-	// and return a proper license response.
-	response.OK(c, gin.H{
-		"key_id":      key.KeyID,
-		"drm_system":  key.DRMSystem,
-		"license_url": key.LicenseURL,
-	})
-}
-
-// FairPlayCertificate serves the FairPlay certificate.
-func (h *DRMHandler) FairPlayCertificate(c *gin.Context) {
-	// In production: serve the Apple-issued FairPlay certificate
-	response.OK(c, gin.H{"message": "FairPlay certificate endpoint - configure fairplay_cert_path"})
-}
-
-// FairPlayLicense handles FairPlay license requests.
-func (h *DRMHandler) FairPlayLicense(c *gin.Context) {
-	var input struct {
-		KeyID string `json:"key_id" binding:"required"`
-		SPC   string `json:"spc"` // Server Playback Context (base64)
-	}
-	if err := c.ShouldBindJSON(&input); err != nil {
-		response.BadRequest(c, err.Error())
-		return
-	}
-
-	key, err := h.drmSvc.GetKeyByID(input.KeyID)
+	key, err := h.drmSvc.GetKeyByVideo(video.ID)
 	if err != nil {
-		response.NotFound(c, "key not found")
+		response.NotFound(c, "no DRM keys for this video")
 		return
 	}
 
-	// In production: process the SPC and return a CKC (Content Key Context)
-	response.OK(c, gin.H{
-		"key_id":     key.KeyID,
-		"drm_system": key.DRMSystem,
-	})
+	response.OK(c, key)
+}
+
+// ClearKeyLicense handles W3C ClearKey license requests.
+// The player sends a JSON request with "kids" (key IDs in base64url),
+// and we respond with the matching keys in the ClearKey format.
+//
+// Request:  {"kids": ["<base64url key_id>"], "type": "temporary"}
+// Response: {"keys": [{"kty":"oct","kid":"<base64url>","k":"<base64url>"}], "type":"temporary"}
+func (h *DRMHandler) ClearKeyLicense(c *gin.Context) {
+	type clearKeyRequest struct {
+		Kids []string `json:"kids"`
+		Type string   `json:"type"`
+	}
+	var req clearKeyRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(400, gin.H{"error": "invalid ClearKey request"})
+		return
+	}
+
+	type clearKeyEntry struct {
+		Kty string `json:"kty"`
+		Kid string `json:"kid"`
+		K   string `json:"k"`
+	}
+	type clearKeyResponse struct {
+		Keys []clearKeyEntry `json:"keys"`
+		Type string          `json:"type"`
+	}
+
+	resp := clearKeyResponse{Type: "temporary"}
+
+	for _, kidB64 := range req.Kids {
+		// Decode base64url kid to raw bytes, then to hex for DB lookup
+		kidBytes, err := base64.RawURLEncoding.DecodeString(kidB64)
+		if err != nil || len(kidBytes) != 16 {
+			continue
+		}
+		kidHex := hex.EncodeToString(kidBytes)
+
+		key, err := h.drmSvc.GetKeyByID(kidHex)
+		if err != nil {
+			continue
+		}
+
+		// Decode content key from hex to raw bytes, then base64url encode
+		contentKeyBytes, err := hex.DecodeString(key.ContentKey)
+		if err != nil {
+			continue
+		}
+
+		resp.Keys = append(resp.Keys, clearKeyEntry{
+			Kty: "oct",
+			Kid: base64.RawURLEncoding.EncodeToString(kidBytes),
+			K:   base64.RawURLEncoding.EncodeToString(contentKeyBytes),
+		})
+	}
+
+	if len(resp.Keys) == 0 {
+		c.JSON(404, gin.H{"error": "no matching keys found"})
+		return
+	}
+
+	c.JSON(200, resp)
 }

@@ -122,10 +122,10 @@ func main() {
 	authSvc := service.NewAuthService(userRepo, cfg.JWT)
 	videoSvc := service.NewVideoService(videoRepo)
 	uploadSvc := service.NewUploadService(s3Client, videoRepo)
-	transcodeSvc := service.NewTranscodeService(taskRepo, videoRepo, producer)
+	drmSvc := service.NewDRMService(drmRepo, videoRepo)
+	transcodeSvc := service.NewTranscodeService(taskRepo, videoRepo, producer, s3Client, drmSvc)
 	categorySvc := service.NewCategoryService(categoryRepo)
 	workerSvc := service.NewWorkerService(workerRepo)
-	drmSvc := service.NewDRMService(drmRepo)
 
 	// Handlers
 	handlers := router.Handlers{
