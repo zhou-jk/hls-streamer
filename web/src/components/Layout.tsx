@@ -16,11 +16,11 @@ import { useAuthStore } from '../store/auth';
 const { Header, Sider, Content } = AntLayout;
 
 const menuItems = [
-  { key: '/', icon: <DashboardOutlined />, label: '仪表盘' },
-  { key: '/videos', icon: <VideoCameraOutlined />, label: '视频管理' },
-  { key: '/users', icon: <UserOutlined />, label: '用户管理' },
-  { key: '/categories', icon: <AppstoreOutlined />, label: '分类标签' },
-  { key: '/tasks', icon: <ThunderboltOutlined />, label: '任务监控' },
+  { key: '/admin', icon: <DashboardOutlined />, label: 'Dashboard' },
+  { key: '/admin/videos', icon: <VideoCameraOutlined />, label: 'Videos' },
+  { key: '/admin/users', icon: <UserOutlined />, label: 'Users' },
+  { key: '/admin/categories', icon: <AppstoreOutlined />, label: 'Categories' },
+  { key: '/admin/tasks', icon: <ThunderboltOutlined />, label: 'Tasks' },
 ];
 
 export default function AppLayout() {
@@ -31,8 +31,8 @@ export default function AppLayout() {
   const { token: { colorBgContainer, borderRadiusLG } } = theme.useToken();
 
   const selectedKey = menuItems.find(
-    (item) => item.key !== '/' && location.pathname.startsWith(item.key),
-  )?.key || '/';
+    (item) => item.key !== '/admin' && location.pathname.startsWith(item.key),
+  )?.key || '/admin';
 
   return (
     <AntLayout style={{ minHeight: '100vh' }}>
@@ -58,12 +58,12 @@ export default function AppLayout() {
           <Dropdown
             menu={{
               items: [
-                { key: 'logout', icon: <LogoutOutlined />, label: '退出登录', danger: true },
+                { key: 'logout', icon: <LogoutOutlined />, label: 'Sign out', danger: true },
               ],
               onClick: ({ key }) => {
                 if (key === 'logout') {
                   logout();
-                  navigate('/login');
+                  navigate('/admin/login');
                 }
               },
             }}

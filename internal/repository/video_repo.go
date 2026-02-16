@@ -82,6 +82,51 @@ func (r *VideoRepo) List(params VideoListParams) ([]model.Video, int64, error) {
 	return videos, total, err
 }
 
+func (r *VideoRepo) ListPublic(params VideoListParams) ([]model.Video, int64, error) {
+	var videos []model.Video
+	var total int64
+
+	q := r.db.Model(&model.Video{}).Where("deleted_at IS NULL AND is_public = ? AND status = ?", true, "ready")
+
+	if params.Category > 0 {
+		q = q.Joins("JOIN video_categories ON video_categories.video_id = videos.id").
+			Where("video_categories.category_id = ?", params.Category)
+	}
+	if params.Query != "" {
+		q = q.Joins("JOIN video_translations ON video_translations.video_id = videos.id").
+			Where("video_translations.title LIKE ?", "%"+params.Query+"%")
+	}
+
+	q.Count(&total)
+
+	err := q.Preload("Translations").
+		Preload("Thumbnails", "is_default = ?", true).
+		Preload("Categories.Translations").
+		Preload("Tags.Translations").
+		Offset((params.Page - 1) * params.PerPage).
+		Limit(params.PerPage).
+		Order("videos.sort_order DESC, videos.created_at DESC").
+		Find(&videos).Error
+
+	return videos, total, err
+}
+
+func (r *VideoRepo) FindPublicByUUID(uuid string) (*model.Video, error) {
+	var video model.Video
+	err := r.db.Where("uuid = ? AND deleted_at IS NULL AND is_public = ? AND status = ?", uuid, true, "ready").
+		Preload("Translations").
+		Preload("Variants", "status = ?", "ready").
+		Preload("Thumbnails").
+		Preload("Subtitles").
+		Preload("Categories.Translations").
+		Preload("Tags.Translations").
+		First(&video).Error
+	if err != nil {
+		return nil, err
+	}
+	return &video, nil
+}
+
 func (r *VideoRepo) Update(video *model.Video) error {
 	return r.db.Omit("Translations", "Variants", "Thumbnails", "Subtitles", "Categories", "Tags", "Cast").Save(video).Error
 }

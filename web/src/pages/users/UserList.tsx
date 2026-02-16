@@ -36,13 +36,13 @@ export default function UserList() {
       } else {
         await usersApi.create({ username: values.username, email: values.email, password: values.password!, role_id: values.role_id });
       }
-      message.success(editing ? '已更新' : '已创建');
+      message.success(editing ? 'Updated' : 'Created');
       setModalOpen(false);
       setEditing(null);
       form.resetFields();
       fetch(meta.page);
     } catch {
-      message.error('操作失败');
+      message.error('Operation failed');
     }
   };
 
@@ -54,14 +54,14 @@ export default function UserList() {
 
   const toggleActive = async (user: User) => {
     await usersApi.update(user.id, { is_active: !user.is_active });
-    message.success(user.is_active ? '已停用' : '已启用');
+    message.success(user.is_active ? 'Deactivated' : 'Activated');
     fetch(meta.page);
   };
 
   return (
     <>
       <Button type="primary" icon={<PlusOutlined />} onClick={() => { setEditing(null); form.resetFields(); setModalOpen(true); }} style={{ marginBottom: 16 }}>
-        新建用户
+        New User
       </Button>
 
       <Table
@@ -70,17 +70,17 @@ export default function UserList() {
         loading={loading}
         pagination={{ current: meta.page, pageSize: meta.per_page, total: meta.total, onChange: (p) => fetch(p) }}
         columns={[
-          { title: '用户名', dataIndex: 'username' },
-          { title: '邮箱', dataIndex: 'email' },
-          { title: '角色', dataIndex: 'role', render: (r?: Role) => r ? <Tag>{r.name}</Tag> : '-' },
-          { title: '状态', dataIndex: 'is_active', render: (v: boolean) => <Tag color={v ? 'green' : 'red'}>{v ? '活跃' : '停用'}</Tag> },
-          { title: '最后登录', dataIndex: 'last_login_at', render: (t?: string) => t ? new Date(t).toLocaleString() : '-' },
+          { title: 'Username', dataIndex: 'username' },
+          { title: 'Email', dataIndex: 'email' },
+          { title: 'Role', dataIndex: 'role', render: (r?: Role) => r ? <Tag>{r.name}</Tag> : '-' },
+          { title: 'Status', dataIndex: 'is_active', render: (v: boolean) => <Tag color={v ? 'green' : 'red'}>{v ? 'Active' : 'Inactive'}</Tag> },
+          { title: 'Last Login', dataIndex: 'last_login_at', render: (t?: string) => t ? new Date(t).toLocaleString() : '-' },
           {
-            title: '操作', render: (_: unknown, r: User) => (
+            title: 'Actions', render: (_: unknown, r: User) => (
               <Space>
-                <Button type="link" size="small" onClick={() => openEdit(r)}>编辑</Button>
-                <Popconfirm title={r.is_active ? '确认停用?' : '确认启用?'} onConfirm={() => toggleActive(r)}>
-                  <Button type="link" size="small" danger={r.is_active}>{r.is_active ? '停用' : '启用'}</Button>
+                <Button type="link" size="small" onClick={() => openEdit(r)}>Edit</Button>
+                <Popconfirm title={r.is_active ? 'Confirm deactivate?' : 'Confirm activate?'} onConfirm={() => toggleActive(r)}>
+                  <Button type="link" size="small" danger={r.is_active}>{r.is_active ? 'Deactivate' : 'Activate'}</Button>
                 </Popconfirm>
               </Space>
             ),
@@ -88,12 +88,12 @@ export default function UserList() {
         ]}
       />
 
-      <Modal title={editing ? '编辑用户' : '新建用户'} open={modalOpen} onCancel={() => { setModalOpen(false); setEditing(null); }} onOk={() => form.submit()} destroyOnClose>
+      <Modal title={editing ? 'Edit User' : 'New User'} open={modalOpen} onCancel={() => { setModalOpen(false); setEditing(null); }} onOk={() => form.submit()} destroyOnClose>
         <Form form={form} layout="vertical" onFinish={handleSubmit}>
-          <Form.Item name="username" label="用户名" rules={[{ required: true }]}><Input /></Form.Item>
-          <Form.Item name="email" label="邮箱" rules={[{ required: true, type: 'email' }]}><Input /></Form.Item>
-          {!editing && <Form.Item name="password" label="密码" rules={[{ required: true, min: 8 }]}><Input.Password /></Form.Item>}
-          <Form.Item name="role_id" label="角色" rules={[{ required: true }]}>
+          <Form.Item name="username" label="Username" rules={[{ required: true }]}><Input /></Form.Item>
+          <Form.Item name="email" label="Email" rules={[{ required: true, type: 'email' }]}><Input /></Form.Item>
+          {!editing && <Form.Item name="password" label="Password" rules={[{ required: true, min: 8 }]}><Input.Password /></Form.Item>}
+          <Form.Item name="role_id" label="Role" rules={[{ required: true }]}>
             <Select options={roles.map((r) => ({ value: r.id, label: r.name }))} />
           </Form.Item>
         </Form>

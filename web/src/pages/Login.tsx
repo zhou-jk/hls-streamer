@@ -13,10 +13,10 @@ export default function Login() {
     setLoading(true);
     try {
       await login(values.username, values.password);
-      message.success('登录成功');
-      navigate('/');
+      message.success('Login successful');
+      navigate('/admin');
     } catch {
-      message.error('用户名或密码错误');
+      message.error('Invalid username or password');
     } finally {
       setLoading(false);
     }
@@ -26,18 +26,18 @@ export default function Login() {
     <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh', background: '#f0f2f5' }}>
       <Card style={{ width: 400 }}>
         <Typography.Title level={3} style={{ textAlign: 'center', marginBottom: 32 }}>
-          HLS Streamer 管理后台
+          HLS Streamer Admin
         </Typography.Title>
         <Form onFinish={onFinish} size="large">
-          <Form.Item name="username" rules={[{ required: true, message: '请输入用户名' }]}>
-            <Input prefix={<UserOutlined />} placeholder="用户名" />
+          <Form.Item name="username" rules={[{ required: true, message: 'Please enter username' }]}>
+            <Input prefix={<UserOutlined />} placeholder="Username" />
           </Form.Item>
-          <Form.Item name="password" rules={[{ required: true, message: '请输入密码' }]}>
-            <Input.Password prefix={<LockOutlined />} placeholder="密码" />
+          <Form.Item name="password" rules={[{ required: true, message: 'Please enter password' }]}>
+            <Input.Password prefix={<LockOutlined />} placeholder="Password" />
           </Form.Item>
           <Form.Item>
             <Button type="primary" htmlType="submit" loading={loading} block>
-              登录
+              Sign in
             </Button>
           </Form.Item>
         </Form>

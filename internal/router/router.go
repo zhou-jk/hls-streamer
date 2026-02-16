@@ -157,6 +157,14 @@ func Setup(cfg *config.Config, h Handlers) *gin.Engine {
 		drm.POST("/clearkey/license", h.DRM.ClearKeyLicense)
 	}
 
+	// Public video API (no auth, only public+ready videos)
+	pub := api.Group("/public")
+	{
+		pub.GET("/videos", h.Video.ListPublic)
+		pub.GET("/videos/:uuid", h.Video.GetPublic)
+		pub.GET("/categories", h.Category.ListCategories)
+	}
+
 	// Playback endpoints (public or token-gated)
 	play := r.Group("/play")
 	{

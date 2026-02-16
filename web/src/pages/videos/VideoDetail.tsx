@@ -31,7 +31,7 @@ export default function VideoDetail() {
 
   const copyToClipboard = (text: string) => {
     if (navigator.clipboard?.writeText) {
-      navigator.clipboard.writeText(text).then(() => message.success('已复制'), () => fallbackCopy(text));
+      navigator.clipboard.writeText(text).then(() => message.success('Copied'), () => fallbackCopy(text));
     } else {
       fallbackCopy(text);
     }
@@ -45,7 +45,7 @@ export default function VideoDetail() {
     ta.select();
     document.execCommand('copy');
     document.body.removeChild(ta);
-    message.success('已复制');
+    message.success('Copied');
   };
 
   const [video, setVideo] = useState<Video | null>(null);
@@ -115,7 +115,7 @@ export default function VideoDetail() {
 
   const load = () => {
     if (!uuid) return;
-    videosApi.get(uuid).then((r) => setVideo(r.data.data)).catch(() => message.error('视频不存在'));
+    videosApi.get(uuid).then((r) => setVideo(r.data.data)).catch(() => message.error('Video not found'));
     videosApi.listTasks(uuid).then((r) => setTasks(r.data.data || [])).catch(() => {});
   };
 
@@ -132,7 +132,7 @@ export default function VideoDetail() {
 
   const handleUpdate = async (values: Record<string, string>) => {
     await videosApi.update(video.uuid, values);
-    message.success('已更新');
+    message.success('Updated');
     load();
   };
 
@@ -189,10 +189,10 @@ export default function VideoDetail() {
       setUploadProgress(95);
       await videosApi.completeUpload(uuid, { upload_id, s3_key, parts });
       setUploadProgress(100);
-      message.success('视频上传完成，已开始探测');
+      message.success('Video uploaded, probing started');
       load();
     } catch (err) {
-      message.error('上传失败');
+      message.error('Upload failed');
       console.error(err);
     } finally {
       setUploading(false);
@@ -202,27 +202,27 @@ export default function VideoDetail() {
   const handleTranscode = async (values: { resolutions: string[]; codec: string; drm: boolean }) => {
     const resolutions = PRESETS.filter((p) => values.resolutions.includes(p.name));
     await videosApi.startTranscode(video.uuid, { resolutions, codec: values.codec || 'h264', drm: values.drm || false });
-    message.success('转码任务已创建');
+    message.success('Transcode tasks created');
     load();
   };
 
   const handleUpsertTranslation = async (values: { language_code: string; title: string; description?: string; synopsis?: string }) => {
     await videosApi.upsertTranslation(video.uuid, values.language_code, { title: values.title, description: values.description, synopsis: values.synopsis });
-    message.success('翻译已保存');
+    message.success('Translation saved');
     transLang.resetFields();
     load();
   };
 
   const handleGenThumbnails = async () => {
     await videosApi.generateThumbnails(video.uuid, { count: 5, width: 320 });
-    message.success('缩略图生成任务已创建');
+    message.success('Thumbnail generation started');
     load();
   };
 
   // Subtitle file upload
   const handleSubtitleUpload = async (values: { language_code: string; label: string }) => {
     if (!subFileRef.current) {
-      message.error('请选择字幕文件');
+      message.error('Please select a subtitle file');
       return;
     }
     setSubUploading(true);
@@ -232,12 +232,12 @@ export default function VideoDetail() {
       fd.append('language_code', values.language_code);
       fd.append('label', values.label);
       await videosApi.uploadSubtitle(video.uuid, fd);
-      message.success('字幕上传成功');
+      message.success('Subtitle uploaded');
       subForm.resetFields();
       subFileRef.current = null;
       load();
     } catch {
-      message.error('字幕上传失败');
+      message.error('Subtitle upload failed');
     } finally {
       setSubUploading(false);
     }
@@ -245,29 +245,29 @@ export default function VideoDetail() {
 
   return (
     <>
-      <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/videos')} style={{ marginBottom: 16 }}>返回列表</Button>
+      <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/admin/videos')} style={{ marginBottom: 16 }}>Back to list</Button>
 
       <Tabs defaultActiveKey="info" items={[
         {
-          key: 'info', label: '基本信息',
+          key: 'info', label: 'Info',
           children: (
             <Card>
               <Descriptions column={2} bordered size="small" style={{ marginBottom: 24 }}>
                 <Descriptions.Item label="UUID">{video.uuid}</Descriptions.Item>
-                <Descriptions.Item label="状态"><Tag color={statusColors[video.status]}>{video.status}</Tag></Descriptions.Item>
-                <Descriptions.Item label="原始文件">{video.original_filename}</Descriptions.Item>
-                <Descriptions.Item label="编码">{video.codec || '-'}</Descriptions.Item>
-                <Descriptions.Item label="分辨率">{video.width && video.height ? `${video.width}x${video.height}` : '-'}</Descriptions.Item>
-                <Descriptions.Item label="时长">{video.duration_seconds ? `${Math.floor(video.duration_seconds / 60)}:${String(Math.floor(video.duration_seconds % 60)).padStart(2, '0')}` : '-'}</Descriptions.Item>
+                <Descriptions.Item label="Status"><Tag color={statusColors[video.status]}>{video.status}</Tag></Descriptions.Item>
+                <Descriptions.Item label="Original File">{video.original_filename}</Descriptions.Item>
+                <Descriptions.Item label="Codec">{video.codec || '-'}</Descriptions.Item>
+                <Descriptions.Item label="Resolution">{video.width && video.height ? `${video.width}x${video.height}` : '-'}</Descriptions.Item>
+                <Descriptions.Item label="Duration">{video.duration_seconds ? `${Math.floor(video.duration_seconds / 60)}:${String(Math.floor(video.duration_seconds % 60)).padStart(2, '0')}` : '-'}</Descriptions.Item>
                 <Descriptions.Item label="FPS">{video.fps || '-'}</Descriptions.Item>
-                <Descriptions.Item label="文件大小">{video.file_size_bytes ? `${(video.file_size_bytes / 1024 / 1024).toFixed(1)} MB` : '-'}</Descriptions.Item>
-                <Descriptions.Item label="DRM">{video.has_drm ? '是' : '否'}</Descriptions.Item>
-                <Descriptions.Item label="公开">
-                  <Switch checked={video.is_public} onChange={async (checked) => { await videosApi.update(video.uuid, { is_public: checked }); message.success('已更新'); load(); }} />
+                <Descriptions.Item label="File Size">{video.file_size_bytes ? `${(video.file_size_bytes / 1024 / 1024).toFixed(1)} MB` : '-'}</Descriptions.Item>
+                <Descriptions.Item label="DRM">{video.has_drm ? 'Yes' : 'No'}</Descriptions.Item>
+                <Descriptions.Item label="Public">
+                  <Switch checked={video.is_public} onChange={async (checked) => { await videosApi.update(video.uuid, { is_public: checked }); message.success('Updated'); load(); }} />
                 </Descriptions.Item>
-                <Descriptions.Item label="播放次数">{video.view_count}</Descriptions.Item>
+                <Descriptions.Item label="Views">{video.view_count}</Descriptions.Item>
                 {video.master_playlist_key && (
-                  <Descriptions.Item label="播放地址">
+                  <Descriptions.Item label="Playback URL">
                     <Space>
                       <a href={`/play/${video.uuid}/master.m3u8`} target="_blank" rel="noreferrer">/play/{video.uuid}/master.m3u8</a>
                       <Button type="link" size="small" icon={<CopyOutlined />} onClick={() => {
@@ -277,23 +277,23 @@ export default function VideoDetail() {
                   </Descriptions.Item>
                 )}
                 {video.status !== 'draft' && (
-                  <Descriptions.Item label="下载原片">
+                  <Descriptions.Item label="Download">
                     <Button type="link" size="small" icon={<DownloadOutlined />} href={`/play/${video.uuid}/download`} target="_blank">
-                      下载
+                      Download
                     </Button>
                   </Descriptions.Item>
                 )}
               </Descriptions>
               <Form layout="inline" initialValues={{ slug: video.slug, rating: video.rating }} onFinish={handleUpdate} form={editForm}>
                 <Form.Item name="slug" label="Slug"><Input /></Form.Item>
-                <Form.Item name="rating" label="评级"><Input style={{ width: 80 }} /></Form.Item>
-                <Form.Item><Button type="primary" htmlType="submit">保存</Button></Form.Item>
+                <Form.Item name="rating" label="Rating"><Input style={{ width: 80 }} /></Form.Item>
+                <Form.Item><Button type="primary" htmlType="submit">Save</Button></Form.Item>
               </Form>
             </Card>
           ),
         },
         {
-          key: 'preview', label: '预览播放',
+          key: 'preview', label: 'Preview',
           children: (
             <Card>
               {video.master_playlist_key ? (
@@ -310,26 +310,26 @@ export default function VideoDetail() {
                     />
                   </div>
                   <Space>
-                    <Link to={`/player/${video.uuid}`}>
-                      <Button icon={<PlayCircleOutlined />}>全屏播放器</Button>
+                    <Link to={`/admin/player/${video.uuid}`}>
+                      <Button icon={<PlayCircleOutlined />}>Fullscreen Player</Button>
                     </Link>
-                    <Button icon={<DownloadOutlined />} href={`/play/${video.uuid}/download`} target="_blank">下载原片</Button>
+                    <Button icon={<DownloadOutlined />} href={`/play/${video.uuid}/download`} target="_blank">Download Original</Button>
                     <Button icon={<CopyOutlined />} onClick={() => {
                       copyToClipboard(`${window.location.origin}/play/${video.uuid}/master.m3u8`);
-                    }}>复制播放地址</Button>
+                    }}>Copy Playback URL</Button>
                   </Space>
                 </div>
               ) : (
                 <div style={{ textAlign: 'center', padding: 60, color: '#999' }}>
                   <PlayCircleOutlined style={{ fontSize: 48, marginBottom: 16 }} />
-                  <p>视频状态: {video.status}，转码完成后可预览</p>
+                  <p>Video status: {video.status}, preview available after transcoding</p>
                 </div>
               )}
             </Card>
           ),
         },
         {
-          key: 'upload', label: '上传视频',
+          key: 'upload', label: 'Upload',
           children: (
             <Card>
               {uploading ? (
@@ -340,12 +340,12 @@ export default function VideoDetail() {
                       {formatSize(uploadDetail.uploaded)} / {formatSize(uploadDetail.total)}
                     </p>
                     <p style={{ margin: '4px 0' }}>
-                      分片 {uploadDetail.part} / {uploadDetail.partCount}
+                      Part {uploadDetail.part} / {uploadDetail.partCount}
                       {uploadDetail.speed > 0 && ` · ${formatSize(uploadDetail.speed)}/s`}
                     </p>
                     {uploadDetail.speed > 0 && uploadDetail.total > uploadDetail.uploaded && (
                       <p style={{ margin: '4px 0', color: '#999' }}>
-                        预计剩余 {Math.ceil((uploadDetail.total - uploadDetail.uploaded) / uploadDetail.speed)}s
+                        Est. remaining {Math.ceil((uploadDetail.total - uploadDetail.uploaded) / uploadDetail.speed)}s
                       </p>
                     )}
                   </div>
@@ -358,15 +358,15 @@ export default function VideoDetail() {
                   showUploadList={false}
                 >
                   <p className="ant-upload-drag-icon"><InboxOutlined /></p>
-                  <p className="ant-upload-text">点击或拖拽视频文件到此区域上传</p>
-                  <p className="ant-upload-hint">支持 MP4、MKV、AVI 等常见视频格式，文件将通过分片上传到 S3</p>
+                  <p className="ant-upload-text">Click or drag video file to upload</p>
+                  <p className="ant-upload-hint">Supports MP4, MKV, AVI and other common formats. Files are uploaded to S3 via multipart upload.</p>
                 </Dragger>
               )}
             </Card>
           ),
         },
         {
-          key: 'translations', label: '多语言翻译',
+          key: 'translations', label: 'Translations',
           children: (
             <Card>
               <Table
@@ -376,49 +376,49 @@ export default function VideoDetail() {
                 pagination={false}
                 style={{ marginBottom: 24 }}
                 columns={[
-                  { title: '语言', dataIndex: 'language_code', width: 80 },
-                  { title: '标题', dataIndex: 'title' },
-                  { title: '描述', dataIndex: 'description', ellipsis: true },
+                  { title: 'Language', dataIndex: 'language_code', width: 80 },
+                  { title: 'Title', dataIndex: 'title' },
+                  { title: 'Description', dataIndex: 'description', ellipsis: true },
                   {
-                    title: '操作', width: 80, render: (_: unknown, r: VideoTranslation) => (
-                      <Popconfirm title="确认删除?" onConfirm={async () => { await videosApi.deleteTranslation(video.uuid, r.language_code); message.success('已删除'); load(); }}>
-                        <Button type="link" size="small" danger>删除</Button>
+                    title: 'Actions', width: 80, render: (_: unknown, r: VideoTranslation) => (
+                      <Popconfirm title="Confirm delete?" onConfirm={async () => { await videosApi.deleteTranslation(video.uuid, r.language_code); message.success('Deleted'); load(); }}>
+                        <Button type="link" size="small" danger>Delete</Button>
                       </Popconfirm>
                     ),
                   },
                 ]}
               />
               <Form form={transLang} layout="inline" onFinish={handleUpsertTranslation}>
-                <Form.Item name="language_code" rules={[{ required: true }]}><Input placeholder="语言代码 (en/zh)" style={{ width: 120 }} /></Form.Item>
-                <Form.Item name="title" rules={[{ required: true }]}><Input placeholder="标题" style={{ width: 200 }} /></Form.Item>
-                <Form.Item name="description"><Input placeholder="描述" style={{ width: 200 }} /></Form.Item>
-                <Form.Item name="synopsis"><Input placeholder="简介" style={{ width: 200 }} /></Form.Item>
-                <Form.Item><Button type="primary" htmlType="submit">添加/更新翻译</Button></Form.Item>
+                <Form.Item name="language_code" rules={[{ required: true }]}><Input placeholder="Language code (en/zh)" style={{ width: 120 }} /></Form.Item>
+                <Form.Item name="title" rules={[{ required: true }]}><Input placeholder="Title" style={{ width: 200 }} /></Form.Item>
+                <Form.Item name="description"><Input placeholder="Description" style={{ width: 200 }} /></Form.Item>
+                <Form.Item name="synopsis"><Input placeholder="Synopsis" style={{ width: 200 }} /></Form.Item>
+                <Form.Item><Button type="primary" htmlType="submit">Add/Update Translation</Button></Form.Item>
               </Form>
             </Card>
           ),
         },
         {
-          key: 'transcode', label: '转码',
+          key: 'transcode', label: 'Transcode',
           children: (
             <Card>
               <Form form={transForm} layout="inline" onFinish={handleTranscode} style={{ marginBottom: 24 }}>
-                <Form.Item name="resolutions" label="分辨率" rules={[{ required: true }]}>
-                  <Select mode="multiple" style={{ width: 300 }} placeholder="选择分辨率" options={PRESETS.map((p) => ({ value: p.name, label: `${p.name} (${p.width}x${p.height})` }))} />
+                <Form.Item name="resolutions" label="Resolution" rules={[{ required: true }]}>
+                  <Select mode="multiple" style={{ width: 300 }} placeholder="Select resolutions" options={PRESETS.map((p) => ({ value: p.name, label: `${p.name} (${p.width}x${p.height})` }))} />
                 </Form.Item>
-                <Form.Item name="codec" label="编码" initialValue="h264">
+                <Form.Item name="codec" label="Codec" initialValue="h264">
                   <Select style={{ width: 100 }} options={[{ value: 'h264' }, { value: 'h265' }]} />
                 </Form.Item>
-                <Form.Item name="drm" label="DRM加密" valuePropName="checked" initialValue={false}>
+                <Form.Item name="drm" label="DRM Encryption" valuePropName="checked" initialValue={false}>
                   <Switch />
                 </Form.Item>
-                <Form.Item><Button type="primary" htmlType="submit">开始转码</Button></Form.Item>
+                <Form.Item><Button type="primary" htmlType="submit">Start Transcode</Button></Form.Item>
               </Form>
 
-              <h4>变体</h4>
+              <h4>Variants</h4>
               {(video.variants || []).length > 0 && (
-                <Popconfirm title="确认删除所有变体？这将删除所有已转码的文件。" onConfirm={async () => { await videosApi.deleteVariants(video.uuid); message.success('变体已删除'); load(); }}>
-                  <Button danger icon={<DeleteOutlined />} style={{ marginBottom: 12 }}>删除所有变体</Button>
+                <Popconfirm title="Delete all variants? This will remove all transcoded files." onConfirm={async () => { await videosApi.deleteVariants(video.uuid); message.success('Variants deleted'); load(); }}>
+                  <Button danger icon={<DeleteOutlined />} style={{ marginBottom: 12 }}>Delete All Variants</Button>
                 </Popconfirm>
               )}
               <Table
@@ -428,44 +428,44 @@ export default function VideoDetail() {
                 pagination={false}
                 style={{ marginBottom: 24 }}
                 columns={[
-                  { title: '分辨率', dataIndex: 'resolution_name' },
-                  { title: '尺寸', render: (_: unknown, r: VideoVariant) => `${r.width}x${r.height}` },
-                  { title: '码率', dataIndex: 'bitrate_kbps', render: (v: number) => `${v} kbps` },
-                  { title: '编码', dataIndex: 'codec' },
-                  { title: '状态', dataIndex: 'status', render: (s: string) => <Tag color={statusColors[s]}>{s}</Tag> },
+                  { title: 'Resolution', dataIndex: 'resolution_name' },
+                  { title: 'Size', render: (_: unknown, r: VideoVariant) => `${r.width}x${r.height}` },
+                  { title: 'Bitrate', dataIndex: 'bitrate_kbps', render: (v: number) => `${v} kbps` },
+                  { title: 'Codec', dataIndex: 'codec' },
+                  { title: 'Status', dataIndex: 'status', render: (s: string) => <Tag color={statusColors[s]}>{s}</Tag> },
                   {
-                    title: '操作', width: 80, render: (_: unknown, r: VideoVariant) => (
-                      <Popconfirm title={`确认删除 ${r.resolution_name} 变体？`} onConfirm={async () => { await videosApi.deleteVariant(video.uuid, r.resolution_name); message.success('变体已删除'); load(); }}>
-                        <Button type="link" size="small" danger>删除</Button>
+                    title: 'Actions', width: 80, render: (_: unknown, r: VideoVariant) => (
+                      <Popconfirm title={`Delete ${r.resolution_name} variant?`} onConfirm={async () => { await videosApi.deleteVariant(video.uuid, r.resolution_name); message.success('Variant deleted'); load(); }}>
+                        <Button type="link" size="small" danger>Delete</Button>
                       </Popconfirm>
                     ),
                   },
                 ]}
               />
 
-              <h4>任务</h4>
+              <h4>Tasks</h4>
               <Table
                 dataSource={tasks}
                 rowKey="task_uuid"
                 size="small"
                 pagination={false}
                 columns={[
-                  { title: '类型', dataIndex: 'type', width: 100 },
-                  { title: '状态', dataIndex: 'status', width: 100, render: (s: string) => <Tag color={statusColors[s]}>{s}</Tag> },
-                  { title: '进度', dataIndex: 'progress', width: 200, render: (p: number) => <Progress percent={p} size="small" /> },
+                  { title: 'Type', dataIndex: 'type', width: 100 },
+                  { title: 'Status', dataIndex: 'status', width: 100, render: (s: string) => <Tag color={statusColors[s]}>{s}</Tag> },
+                  { title: 'Progress', dataIndex: 'progress', width: 200, render: (p: number) => <Progress percent={p} size="small" /> },
                   { title: 'Worker', dataIndex: 'worker_id', render: (w?: string) => w || '-' },
-                  { title: '错误', dataIndex: 'error_message', ellipsis: true, render: (e?: string) => e || '-' },
-                  { title: '创建时间', dataIndex: 'created_at', render: (t: string) => new Date(t).toLocaleString() },
+                  { title: 'Error', dataIndex: 'error_message', ellipsis: true, render: (e?: string) => e || '-' },
+                  { title: 'Created', dataIndex: 'created_at', render: (t: string) => new Date(t).toLocaleString() },
                   {
-                    title: '操作', width: 120, render: (_: unknown, r: TranscodeTask) => (
+                    title: 'Actions', width: 120, render: (_: unknown, r: TranscodeTask) => (
                       <Space size="small">
                         {['pending', 'queued'].includes(r.status) && (
-                          <Popconfirm title="确认取消?" onConfirm={async () => { await videosApi.cancelTask(r.task_uuid); message.success('已取消'); load(); }}>
-                            <Button type="link" size="small" danger>取消</Button>
+                          <Popconfirm title="Confirm cancel?" onConfirm={async () => { await videosApi.cancelTask(r.task_uuid); message.success('Cancelled'); load(); }}>
+                            <Button type="link" size="small" danger>Cancel</Button>
                           </Popconfirm>
                         )}
                         {r.status === 'failed' && (
-                          <Button type="link" size="small" onClick={async () => { await videosApi.retryTask(r.task_uuid); message.success('已重试'); load(); }}>重试</Button>
+                          <Button type="link" size="small" onClick={async () => { await videosApi.retryTask(r.task_uuid); message.success('Retried'); load(); }}>Retry</Button>
                         )}
                       </Space>
                     ),
@@ -476,10 +476,10 @@ export default function VideoDetail() {
           ),
         },
         {
-          key: 'thumbnails', label: '缩略图',
+          key: 'thumbnails', label: 'Thumbnails',
           children: (
             <Card>
-              <Button type="primary" onClick={handleGenThumbnails} style={{ marginBottom: 16 }}>生成缩略图</Button>
+              <Button type="primary" onClick={handleGenThumbnails} style={{ marginBottom: 16 }}>Generate Thumbnails</Button>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16 }}>
                 {(video.thumbnails || []).map((t: Thumbnail) => {
                   const filename = t.s3_key.split('/').pop();
@@ -488,9 +488,9 @@ export default function VideoDetail() {
                     <Card key={t.id} size="small" style={{ width: 200 }}
                       cover={<Image src={imgUrl} alt={`thumbnail-${t.id}`} style={{ height: 120, objectFit: 'cover' }} />}
                       actions={[
-                        !t.is_default ? <Button type="link" size="small" onClick={async () => { await videosApi.setDefaultThumbnail(video.uuid, t.id); message.success('已设为默认'); load(); }}>设为默认</Button> : <Tag color="green">默认</Tag>,
-                        <Popconfirm key="del" title="确认删除?" onConfirm={async () => { await videosApi.deleteThumbnail(video.uuid, t.id); message.success('已删除'); load(); }}>
-                          <Button type="link" size="small" danger>删除</Button>
+                        !t.is_default ? <Button type="link" size="small" onClick={async () => { await videosApi.setDefaultThumbnail(video.uuid, t.id); message.success('Set as default'); load(); }}>Set Default</Button> : <Tag color="green">Default</Tag>,
+                        <Popconfirm key="del" title="Confirm delete?" onConfirm={async () => { await videosApi.deleteThumbnail(video.uuid, t.id); message.success('Deleted'); load(); }}>
+                          <Button type="link" size="small" danger>Delete</Button>
                         </Popconfirm>,
                       ]}
                     >
@@ -499,12 +499,12 @@ export default function VideoDetail() {
                   );
                 })}
               </div>
-              {(video.thumbnails || []).length === 0 && <p style={{ color: '#999' }}>暂无缩略图，点击上方按钮生成</p>}
+              {(video.thumbnails || []).length === 0 && <p style={{ color: '#999' }}>No thumbnails yet. Click the button above to generate.</p>}
             </Card>
           ),
         },
         {
-          key: 'subtitles', label: '字幕',
+          key: 'subtitles', label: 'Subtitles',
           children: (
             <Card>
               <Table
@@ -514,25 +514,25 @@ export default function VideoDetail() {
                 pagination={false}
                 style={{ marginBottom: 24 }}
                 columns={[
-                  { title: '语言', dataIndex: 'language_code' },
-                  { title: '标签', dataIndex: 'label' },
+                  { title: 'Language', dataIndex: 'language_code' },
+                  { title: 'Label', dataIndex: 'label' },
                   { title: 'S3 Key', dataIndex: 's3_key', ellipsis: true },
-                  { title: '默认', dataIndex: 'is_default', render: (v: boolean) => v ? <Tag color="green">默认</Tag> : null },
+                  { title: 'Default', dataIndex: 'is_default', render: (v: boolean) => v ? <Tag color="green">Default</Tag> : null },
                   {
-                    title: '操作', render: (_: unknown, r: Subtitle) => (
-                      <Popconfirm title="确认删除?" onConfirm={async () => { await videosApi.deleteSubtitle(video.uuid, r.id); message.success('已删除'); load(); }}>
-                        <Button type="link" size="small" danger>删除</Button>
+                    title: 'Actions', render: (_: unknown, r: Subtitle) => (
+                      <Popconfirm title="Confirm delete?" onConfirm={async () => { await videosApi.deleteSubtitle(video.uuid, r.id); message.success('Deleted'); load(); }}>
+                        <Button type="link" size="small" danger>Delete</Button>
                       </Popconfirm>
                     ),
                   },
                 ]}
               />
               <Form form={subForm} layout="inline" onFinish={handleSubtitleUpload}>
-                <Form.Item name="language_code" rules={[{ required: true, message: '请输入语言代码' }]}>
-                  <Input placeholder="语言代码 (en/zh-CN)" style={{ width: 140 }} />
+                <Form.Item name="language_code" rules={[{ required: true, message: 'Please enter language code' }]}>
+                  <Input placeholder="Language code (en/zh-CN)" style={{ width: 140 }} />
                 </Form.Item>
-                <Form.Item name="label" rules={[{ required: true, message: '请输入标签' }]}>
-                  <Input placeholder="标签 (如: 中文字幕)" style={{ width: 160 }} />
+                <Form.Item name="label" rules={[{ required: true, message: 'Please enter label' }]}>
+                  <Input placeholder="Label (e.g. English)" style={{ width: 160 }} />
                 </Form.Item>
                 <Form.Item>
                   <Upload
@@ -541,18 +541,18 @@ export default function VideoDetail() {
                     beforeUpload={(file) => { subFileRef.current = file; return false; }}
                     onRemove={() => { subFileRef.current = null; }}
                   >
-                    <Button icon={<UploadOutlined />}>选择字幕文件</Button>
+                    <Button icon={<UploadOutlined />}>Select Subtitle File</Button>
                   </Upload>
                 </Form.Item>
                 <Form.Item>
-                  <Button type="primary" htmlType="submit" loading={subUploading}>上传字幕</Button>
+                  <Button type="primary" htmlType="submit" loading={subUploading}>Upload Subtitle</Button>
                 </Form.Item>
               </Form>
             </Card>
           ),
         },
         {
-          key: 'cast', label: '演职人员',
+          key: 'cast', label: 'Cast',
           children: (
             <Card>
               <Table
@@ -561,13 +561,13 @@ export default function VideoDetail() {
                 size="small"
                 pagination={false}
                 columns={[
-                  { title: '姓名', render: (_: unknown, r: { person?: { translations?: { name: string }[] } }) => r.person?.translations?.[0]?.name || '-' },
-                  { title: '角色类型', dataIndex: 'role' },
-                  { title: '角色名', dataIndex: 'character' },
+                  { title: 'Name', render: (_: unknown, r: { person?: { translations?: { name: string }[] } }) => r.person?.translations?.[0]?.name || '-' },
+                  { title: 'Role Type', dataIndex: 'role' },
+                  { title: 'Character', dataIndex: 'character' },
                   {
-                    title: '操作', render: (_: unknown, r: { id?: number; person?: { translations?: { name: string }[] } }) => (
-                      <Popconfirm title="确认移除?" onConfirm={async () => { if (r.id) { await videosApi.deleteCast(video.uuid, r.id); message.success('已移除'); load(); } }}>
-                        <Button type="link" size="small" danger>移除</Button>
+                    title: 'Actions', render: (_: unknown, r: { id?: number; person?: { translations?: { name: string }[] } }) => (
+                      <Popconfirm title="Confirm remove?" onConfirm={async () => { if (r.id) { await videosApi.deleteCast(video.uuid, r.id); message.success('Removed'); load(); } }}>
+                        <Button type="link" size="small" danger>Remove</Button>
                       </Popconfirm>
                     ),
                   },

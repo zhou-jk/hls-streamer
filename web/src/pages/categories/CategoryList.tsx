@@ -22,7 +22,7 @@ export default function CategoryList() {
 
   const handleCreateCategory = async (values: { slug: string }) => {
     await categoriesApi.create(values);
-    message.success('分类已创建');
+    message.success('Category created');
     setCatModalOpen(false);
     catForm.resetFields();
     fetchCategories();
@@ -30,7 +30,7 @@ export default function CategoryList() {
 
   const handleCreateTag = async (values: { slug: string }) => {
     await tagsApi.create(values);
-    message.success('标签已创建');
+    message.success('Tag created');
     setTagModalOpen(false);
     tagForm.resetFields();
     fetchTags();
@@ -39,7 +39,7 @@ export default function CategoryList() {
   const handleUpsertTranslation = async (values: { language_code: string; name: string; description?: string }) => {
     if (!selectedCat) return;
     await categoriesApi.upsertTranslation(selectedCat.id, values.language_code, { name: values.name, description: values.description });
-    message.success('翻译已保存');
+    message.success('Translation saved');
     setTransModalOpen(false);
     transForm.resetFields();
     fetchCategories();
@@ -48,10 +48,10 @@ export default function CategoryList() {
   return (
     <Tabs items={[
       {
-        key: 'categories', label: '分类',
+        key: 'categories', label: 'Categories',
         children: (
           <>
-            <Button type="primary" icon={<PlusOutlined />} onClick={() => setCatModalOpen(true)} style={{ marginBottom: 16 }}>新建分类</Button>
+            <Button type="primary" icon={<PlusOutlined />} onClick={() => setCatModalOpen(true)} style={{ marginBottom: 16 }}>New Category</Button>
             <Table
               dataSource={categories}
               rowKey="id"
@@ -59,41 +59,41 @@ export default function CategoryList() {
               columns={[
                 { title: 'ID', dataIndex: 'id', width: 60 },
                 { title: 'Slug', dataIndex: 'slug' },
-                { title: '名称', key: 'name', render: (_: unknown, r: Category) => r.translations?.[0]?.name || '-' },
-                { title: '排序', dataIndex: 'sort_order', width: 80 },
-                { title: '状态', dataIndex: 'is_active', width: 80, render: (v: boolean) => <Tag color={v ? 'green' : 'red'}>{v ? '启用' : '停用'}</Tag> },
+                { title: 'Name', key: 'name', render: (_: unknown, r: Category) => r.translations?.[0]?.name || '-' },
+                { title: 'Sort', dataIndex: 'sort_order', width: 80 },
+                { title: 'Status', dataIndex: 'is_active', width: 80, render: (v: boolean) => <Tag color={v ? 'green' : 'red'}>{v ? 'Active' : 'Inactive'}</Tag> },
                 {
-                  title: '操作', width: 200, render: (_: unknown, r: Category) => (
+                  title: 'Actions', width: 200, render: (_: unknown, r: Category) => (
                     <Space>
-                      <Button type="link" size="small" onClick={() => { setSelectedCat(r); setTransModalOpen(true); }}>翻译</Button>
-                      <Popconfirm title="确认删除?" onConfirm={async () => { await categoriesApi.delete(r.id); message.success('已删除'); fetchCategories(); }}>
-                        <Button type="link" size="small" danger>删除</Button>
+                      <Button type="link" size="small" onClick={() => { setSelectedCat(r); setTransModalOpen(true); }}>Translate</Button>
+                      <Popconfirm title="Confirm delete?" onConfirm={async () => { await categoriesApi.delete(r.id); message.success('Deleted'); fetchCategories(); }}>
+                        <Button type="link" size="small" danger>Delete</Button>
                       </Popconfirm>
                     </Space>
                   ),
                 },
               ]}
             />
-            <Modal title="新建分类" open={catModalOpen} onCancel={() => setCatModalOpen(false)} onOk={() => catForm.submit()} destroyOnClose>
+            <Modal title="New Category" open={catModalOpen} onCancel={() => setCatModalOpen(false)} onOk={() => catForm.submit()} destroyOnClose>
               <Form form={catForm} layout="vertical" onFinish={handleCreateCategory}>
                 <Form.Item name="slug" label="Slug" rules={[{ required: true }]}><Input /></Form.Item>
               </Form>
             </Modal>
-            <Modal title={`翻译 - ${selectedCat?.slug}`} open={transModalOpen} onCancel={() => setTransModalOpen(false)} onOk={() => transForm.submit()} destroyOnClose>
+            <Modal title={`Translation - ${selectedCat?.slug}`} open={transModalOpen} onCancel={() => setTransModalOpen(false)} onOk={() => transForm.submit()} destroyOnClose>
               <Form form={transForm} layout="vertical" onFinish={handleUpsertTranslation}>
-                <Form.Item name="language_code" label="语言代码" rules={[{ required: true }]}><Input placeholder="en / zh / ja" /></Form.Item>
-                <Form.Item name="name" label="名称" rules={[{ required: true }]}><Input /></Form.Item>
-                <Form.Item name="description" label="描述"><Input.TextArea rows={2} /></Form.Item>
+                <Form.Item name="language_code" label="Language Code" rules={[{ required: true }]}><Input placeholder="en / zh / ja" /></Form.Item>
+                <Form.Item name="name" label="Name" rules={[{ required: true }]}><Input /></Form.Item>
+                <Form.Item name="description" label="Description"><Input.TextArea rows={2} /></Form.Item>
               </Form>
             </Modal>
           </>
         ),
       },
       {
-        key: 'tags', label: '标签',
+        key: 'tags', label: 'Tags',
         children: (
           <>
-            <Button type="primary" icon={<PlusOutlined />} onClick={() => setTagModalOpen(true)} style={{ marginBottom: 16 }}>新建标签</Button>
+            <Button type="primary" icon={<PlusOutlined />} onClick={() => setTagModalOpen(true)} style={{ marginBottom: 16 }}>New Tag</Button>
             <Table
               dataSource={tags}
               rowKey="id"
@@ -101,17 +101,17 @@ export default function CategoryList() {
               columns={[
                 { title: 'ID', dataIndex: 'id', width: 60 },
                 { title: 'Slug', dataIndex: 'slug' },
-                { title: '名称', key: 'name', render: (_: unknown, r: TagType) => r.translations?.[0]?.name || '-' },
+                { title: 'Name', key: 'name', render: (_: unknown, r: TagType) => r.translations?.[0]?.name || '-' },
                 {
-                  title: '操作', width: 100, render: (_: unknown, r: TagType) => (
-                    <Popconfirm title="确认删除?" onConfirm={async () => { await tagsApi.delete(r.id); message.success('已删除'); fetchTags(); }}>
-                      <Button type="link" size="small" danger>删除</Button>
+                  title: 'Actions', width: 100, render: (_: unknown, r: TagType) => (
+                    <Popconfirm title="Confirm delete?" onConfirm={async () => { await tagsApi.delete(r.id); message.success('Deleted'); fetchTags(); }}>
+                      <Button type="link" size="small" danger>Delete</Button>
                     </Popconfirm>
                   ),
                 },
               ]}
             />
-            <Modal title="新建标签" open={tagModalOpen} onCancel={() => setTagModalOpen(false)} onOk={() => tagForm.submit()} destroyOnClose>
+            <Modal title="New Tag" open={tagModalOpen} onCancel={() => setTagModalOpen(false)} onOk={() => tagForm.submit()} destroyOnClose>
               <Form form={tagForm} layout="vertical" onFinish={handleCreateTag}>
                 <Form.Item name="slug" label="Slug" rules={[{ required: true }]}><Input /></Form.Item>
               </Form>

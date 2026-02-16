@@ -238,3 +238,39 @@ func (h *VideoHandler) DeleteCast(c *gin.Context) {
 	}
 	response.NoContent(c)
 }
+
+// Public endpoints (no auth)
+
+func (h *VideoHandler) ListPublic(c *gin.Context) {
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	perPage, _ := strconv.Atoi(c.DefaultQuery("per_page", "20"))
+	categoryID, _ := strconv.ParseUint(c.Query("category"), 10, 32)
+
+	params := repository.VideoListParams{
+		Page:     page,
+		PerPage:  perPage,
+		Category: uint(categoryID),
+		Query:    c.Query("q"),
+	}
+
+	videos, total, err := h.videoSvc.ListPublic(params)
+	if err != nil {
+		response.InternalError(c, err.Error())
+		return
+	}
+
+	response.OKWithMeta(c, videos, &response.Meta{
+		Page:    page,
+		PerPage: perPage,
+		Total:   total,
+	})
+}
+
+func (h *VideoHandler) GetPublic(c *gin.Context) {
+	video, err := h.videoSvc.GetPublic(c.Param("uuid"))
+	if err != nil {
+		response.NotFound(c, "video not found")
+		return
+	}
+	response.OK(c, video)
+}

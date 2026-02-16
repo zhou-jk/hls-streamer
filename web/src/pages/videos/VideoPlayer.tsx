@@ -19,7 +19,7 @@ export default function VideoPlayer() {
 
   useEffect(() => {
     if (!uuid) return;
-    videosApi.get(uuid).then((r) => setVideo(r.data.data)).catch(() => message.error('视频不存在'));
+    videosApi.get(uuid).then((r) => setVideo(r.data.data)).catch(() => message.error('Video not found'));
   }, [uuid]);
 
   useEffect(() => {
@@ -122,7 +122,7 @@ export default function VideoPlayer() {
     <div ref={containerRef} style={{ background: '#000', minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
       <div style={{ padding: '12px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(0,0,0,0.8)' }}>
         <Space>
-          <Button type="text" icon={<ArrowLeftOutlined />} onClick={() => navigate(-1)} style={{ color: '#fff' }}>返回</Button>
+          <Button type="text" icon={<ArrowLeftOutlined />} onClick={() => navigate(-1)} style={{ color: '#fff' }}>Back</Button>
           <span style={{ color: '#fff', fontSize: 16 }}>{title}</span>
         </Space>
         <Space>
@@ -133,7 +133,7 @@ export default function VideoPlayer() {
               style={{ width: 140 }}
               size="small"
               options={[
-                { value: -1, label: '自动' },
+                { value: -1, label: 'Auto' },
                 ...levels.map((l) => ({
                   value: l.index,
                   label: `${l.height}p (${(l.bitrate / 1000).toFixed(0)}k)`,
@@ -143,7 +143,7 @@ export default function VideoPlayer() {
           )}
           {video && video.status !== 'draft' && (
             <Button type="text" icon={<DownloadOutlined />} href={`/play/${video.uuid}/download`} target="_blank" style={{ color: '#fff' }}>
-              下载原片
+              Download
             </Button>
           )}
           <Button type="text" icon={isFullscreen ? <CompressOutlined /> : <ExpandOutlined />} onClick={toggleFullscreen} style={{ color: '#fff' }} />
@@ -160,7 +160,7 @@ export default function VideoPlayer() {
           />
         ) : (
           <div style={{ color: '#999', fontSize: 18 }}>
-            {video ? `视频状态: ${video.status}，暂不可播放` : '加载中...'}
+            {video ? `Video status: ${video.status}, not available for playback` : 'Loading...'}
           </div>
         )}
       </div>

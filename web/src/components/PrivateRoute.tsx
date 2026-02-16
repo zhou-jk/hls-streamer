@@ -5,6 +5,6 @@ import { Spin } from 'antd';
 export default function PrivateRoute({ children }: { children: React.ReactNode }) {
   const { token, loading } = useAuthStore();
   if (loading) return <Spin size="large" style={{ display: 'block', margin: '200px auto' }} />;
-  if (!token) return <Navigate to="/login" replace />;
+  if (!token) return <Navigate to="/admin/login" replace />;
   return <>{children}</>;
 }

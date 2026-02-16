@@ -29,32 +29,32 @@ export default function Dashboard() {
     <>
       <Row gutter={16} style={{ marginBottom: 24 }}>
         <Col span={8}>
-          <Card><Statistic title="视频总数" value={videoTotal} prefix={<VideoCameraOutlined />} /></Card>
+          <Card><Statistic title="Total Videos" value={videoTotal} prefix={<VideoCameraOutlined />} /></Card>
         </Col>
         <Col span={8}>
-          <Card><Statistic title="在线 Worker" value={onlineWorkers} suffix={`/ ${workers.length}`} prefix={<CloudServerOutlined />} /></Card>
+          <Card><Statistic title="Online Workers" value={onlineWorkers} suffix={`/ ${workers.length}`} prefix={<CloudServerOutlined />} /></Card>
         </Col>
         <Col span={8}>
-          <Card><Statistic title="处理中视频" value={videos.filter((v) => v.status === 'processing').length} prefix={<ThunderboltOutlined />} /></Card>
+          <Card><Statistic title="Processing" value={videos.filter((v) => v.status === 'processing').length} prefix={<ThunderboltOutlined />} /></Card>
         </Col>
       </Row>
 
-      <Card title="最近视频" style={{ marginBottom: 24 }}>
+      <Card title="Recent Videos" style={{ marginBottom: 24 }}>
         <Table
           dataSource={videos}
           rowKey="uuid"
           pagination={false}
           size="small"
           columns={[
-            { title: '标题', dataIndex: 'translations', render: (t: Video['translations']) => t?.[0]?.title || '-' },
-            { title: '状态', dataIndex: 'status', render: (s: string) => <Tag color={statusColors[s]}>{s}</Tag> },
-            { title: '时长', dataIndex: 'duration_seconds', render: (d?: number) => d ? `${Math.floor(d / 60)}:${String(Math.floor(d % 60)).padStart(2, '0')}` : '-' },
-            { title: '创建时间', dataIndex: 'created_at', render: (t: string) => new Date(t).toLocaleDateString() },
+            { title: 'Title', dataIndex: 'translations', render: (t: Video['translations']) => t?.[0]?.title || '-' },
+            { title: 'Status', dataIndex: 'status', render: (s: string) => <Tag color={statusColors[s]}>{s}</Tag> },
+            { title: 'Duration', dataIndex: 'duration_seconds', render: (d?: number) => d ? `${Math.floor(d / 60)}:${String(Math.floor(d % 60)).padStart(2, '0')}` : '-' },
+            { title: 'Created', dataIndex: 'created_at', render: (t: string) => new Date(t).toLocaleDateString() },
           ]}
         />
       </Card>
 
-      <Card title="Worker 状态">
+      <Card title="Worker Status">
         <Table
           dataSource={workers}
           rowKey="id"
@@ -62,10 +62,10 @@ export default function Dashboard() {
           size="small"
           columns={[
             { title: 'ID', dataIndex: 'id' },
-            { title: '主机名', dataIndex: 'hostname' },
+            { title: 'Hostname', dataIndex: 'hostname' },
             { title: 'IP', dataIndex: 'ip_address' },
-            { title: '状态', dataIndex: 'status', render: (s: string) => <Tag color={statusColors[s]}>{s}</Tag> },
-            { title: '最后心跳', dataIndex: 'last_heartbeat', render: (t: string) => t ? new Date(t).toLocaleString() : '-' },
+            { title: 'Status', dataIndex: 'status', render: (s: string) => <Tag color={statusColors[s]}>{s}</Tag> },
+            { title: 'Last Heartbeat', dataIndex: 'last_heartbeat', render: (t: string) => t ? new Date(t).toLocaleString() : '-' },
           ]}
         />
       </Card>

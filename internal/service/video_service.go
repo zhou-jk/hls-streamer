@@ -81,6 +81,20 @@ func (s *VideoService) List(params repository.VideoListParams) ([]model.Video, i
 	return s.videoRepo.List(params)
 }
 
+func (s *VideoService) ListPublic(params repository.VideoListParams) ([]model.Video, int64, error) {
+	if params.Page <= 0 {
+		params.Page = 1
+	}
+	if params.PerPage <= 0 {
+		params.PerPage = 20
+	}
+	return s.videoRepo.ListPublic(params)
+}
+
+func (s *VideoService) GetPublic(uuid string) (*model.Video, error) {
+	return s.videoRepo.FindPublicByUUID(uuid)
+}
+
 type UpdateVideoInput struct {
 	Slug        *string `json:"slug"`
 	Rating      *string `json:"rating"`

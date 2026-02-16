@@ -33,11 +33,11 @@ client.interceptors.response.use(
           return client(original);
         } catch {
           localStorage.clear();
-          window.location.href = '/login';
+          window.location.href = '/admin/login';
         }
       } else {
         localStorage.clear();
-        window.location.href = '/login';
+        window.location.href = '/admin/login';
       }
     }
     return Promise.reject(error);
