@@ -79,6 +79,10 @@ func (s *DRMService) GetKeyByID(keyID string) (*model.DRMKey, error) {
 	return s.drmRepo.FindByKeyID(keyID)
 }
 
+func (s *DRMService) DeleteByVideoID(videoID uint) error {
+	return s.drmRepo.DeleteByVideoID(videoID)
+}
+
 func randomHex(n int) (string, error) {
 	b := make([]byte, n)
 	if _, err := rand.Read(b); err != nil {

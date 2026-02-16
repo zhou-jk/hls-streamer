@@ -460,6 +460,91 @@ func (s *TranscodeService) DeleteVariants(ctx context.Context, videoUUID string)
 	return s.videoRepo.Update(video)
 }
 
+// DeleteVariant removes a single variant from DB and S3, rebuilds master playlist.
+func (s *TranscodeService) DeleteVariant(ctx context.Context, videoUUID string, variantID uint) error {
+	video, err := s.videoRepo.FindByUUID(videoUUID)
+	if err != nil {
+		return fmt.Errorf("video not found: %w", err)
+	}
+
+	variant, err := s.videoRepo.FindVariant(variantID)
+	if err != nil {
+		return fmt.Errorf("variant not found: %w", err)
+	}
+	if variant.VideoID != video.ID {
+		return fmt.Errorf("variant does not belong to this video")
+	}
+
+	// Delete variant files from S3
+	s3Prefix := fmt.Sprintf("videos/%s/variants/%s/", videoUUID, variant.ResolutionName)
+	_ = s.s3.DeletePrefix(ctx, s3Prefix)
+
+	// Delete variant record from DB
+	if err := s.videoRepo.DeleteVariant(variantID); err != nil {
+		return fmt.Errorf("delete variant record: %w", err)
+	}
+
+	// Rebuild master playlist with remaining variants
+	remaining, _ := s.videoRepo.ListVariants(video.ID)
+	var readyVariants []model.VideoVariant
+	for _, v := range remaining {
+		if v.Status == "ready" {
+			readyVariants = append(readyVariants, v)
+		}
+	}
+
+	if len(readyVariants) == 0 {
+		// No variants left, remove master playlist
+		if video.MasterPlaylistKey != nil {
+			_ = s.s3.Delete(ctx, *video.MasterPlaylistKey)
+		}
+		video.MasterPlaylistKey = nil
+		if video.Status == "ready" {
+			video.Status = "uploaded"
+		}
+	} else {
+		// Rebuild master playlist
+		variantInfos := make([]hls.VariantInfo, len(readyVariants))
+		for i, v := range readyVariants {
+			variantInfos[i] = hls.VariantInfo{
+				Name:         v.ResolutionName,
+				Bandwidth:    int(v.BitrateKbps) * 1000,
+				Width:        int(v.Width),
+				Height:       int(v.Height),
+				PlaylistPath: fmt.Sprintf("variants/%s/playlist.m3u8", v.ResolutionName),
+			}
+		}
+		masterContent := hls.GenerateMasterPlaylist(variantInfos)
+		masterKey := fmt.Sprintf("videos/%s/master.m3u8", videoUUID)
+		_ = s.s3.Upload(ctx, masterKey, strings.NewReader(masterContent), "application/vnd.apple.mpegurl")
+	}
+
+	return s.videoRepo.Update(video)
+}
+
+// DeleteVideo permanently removes a video and all associated data from DB and S3.
+func (s *TranscodeService) DeleteVideo(ctx context.Context, videoUUID string) error {
+	video, err := s.videoRepo.FindByUUID(videoUUID)
+	if err != nil {
+		return fmt.Errorf("video not found: %w", err)
+	}
+
+	// Delete all S3 files under the video prefix (original, variants, thumbnails, subtitles)
+	s3Prefix := fmt.Sprintf("videos/%s/", videoUUID)
+	_ = s.s3.DeletePrefix(ctx, s3Prefix)
+
+	// Delete tasks and task logs
+	_ = s.taskRepo.DeleteByVideoID(video.ID)
+
+	// Delete DRM keys
+	if s.drmSvc != nil {
+		_ = s.drmSvc.DeleteByVideoID(video.ID)
+	}
+
+	// Delete video and all related DB records (translations, variants, thumbnails, subtitles, cast, associations)
+	return s.videoRepo.HardDelete(video.ID)
+}
+
 func (s *TranscodeService) FailTask(taskUUID, errMsg string) error {
 	return s.taskRepo.Fail(taskUUID, errMsg)
 }

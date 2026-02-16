@@ -72,7 +72,7 @@ func Setup(cfg *config.Config, h Handlers) *gin.Engine {
 			videos.GET("/:uuid", h.Video.Get)
 			videos.POST("", h.Video.Create)
 			videos.PUT("/:uuid", h.Video.Update)
-			videos.DELETE("/:uuid", h.Video.Delete)
+			videos.DELETE("/:uuid", h.Transcode.DeleteVideo)
 			videos.POST("/:uuid/restore", h.Video.Restore)
 
 			// Translations
@@ -92,6 +92,7 @@ func Setup(cfg *config.Config, h Handlers) *gin.Engine {
 			// Variants
 			videos.GET("/:uuid/variants", h.Video.ListVariants)
 			videos.DELETE("/:uuid/variants", h.Transcode.DeleteVariants)
+			videos.DELETE("/:uuid/variants/:variant_id", h.Transcode.DeleteVariant)
 
 			// Thumbnails
 			videos.GET("/:uuid/thumbnails", h.Video.ListThumbnails)

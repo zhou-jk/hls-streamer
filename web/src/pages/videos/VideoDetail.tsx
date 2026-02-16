@@ -417,6 +417,13 @@ export default function VideoDetail() {
                   { title: '码率', dataIndex: 'bitrate_kbps', render: (v: number) => `${v} kbps` },
                   { title: '编码', dataIndex: 'codec' },
                   { title: '状态', dataIndex: 'status', render: (s: string) => <Tag color={statusColors[s]}>{s}</Tag> },
+                  {
+                    title: '操作', width: 80, render: (_: unknown, r: VideoVariant) => (
+                      <Popconfirm title={`确认删除 ${r.resolution_name} 变体？`} onConfirm={async () => { await videosApi.deleteVariant(video.uuid, r.id); message.success('变体已删除'); load(); }}>
+                        <Button type="link" size="small" danger>删除</Button>
+                      </Popconfirm>
+                    ),
+                  },
                 ]}
               />
 

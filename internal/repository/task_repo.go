@@ -136,3 +136,9 @@ func (r *TaskRepo) ListAll(params TaskListParams) ([]model.TranscodeTask, int64,
 	err := q.Order("created_at DESC").Offset(offset).Limit(params.PerPage).Find(&tasks).Error
 	return tasks, total, err
 }
+
+func (r *TaskRepo) DeleteByVideoID(videoID uint) error {
+	// Delete task logs first, then tasks
+	r.db.Where("task_id IN (?)", r.db.Model(&model.TranscodeTask{}).Select("id").Where("video_id = ?", videoID)).Delete(&model.TaskLog{})
+	return r.db.Where("video_id = ?", videoID).Delete(&model.TranscodeTask{}).Error
+}

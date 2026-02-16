@@ -21,7 +21,7 @@ func (r *VideoRepo) FindByUUID(uuid string) (*model.Video, error) {
 	var video model.Video
 	err := r.db.Where("uuid = ? AND deleted_at IS NULL", uuid).
 		Preload("Translations").
-		Preload("Variants", "status = ?", "ready").
+		Preload("Variants").
 		Preload("Thumbnails").
 		Preload("Subtitles").
 		Preload("Categories.Translations").
@@ -92,6 +92,23 @@ func (r *VideoRepo) SoftDelete(uuid string) error {
 		Update("deleted_at", gorm.Expr("NOW()")).Error
 }
 
+// HardDelete permanently removes a video and all related records.
+func (r *VideoRepo) HardDelete(videoID uint) error {
+	tx := r.db.Begin()
+	tx.Where("video_id = ?", videoID).Delete(&model.VideoTranslation{})
+	tx.Where("video_id = ?", videoID).Delete(&model.VideoVariant{})
+	tx.Where("video_id = ?", videoID).Delete(&model.Thumbnail{})
+	tx.Where("video_id = ?", videoID).Delete(&model.Subtitle{})
+	tx.Where("video_id = ?", videoID).Delete(&model.VideoCast{})
+	// Clear many-to-many associations
+	video := model.Video{ID: videoID}
+	tx.Model(&video).Association("Categories").Clear()
+	tx.Model(&video).Association("Tags").Clear()
+	// Delete the video itself (hard delete)
+	tx.Unscoped().Delete(&model.Video{}, videoID)
+	return tx.Commit().Error
+}
+
 func (r *VideoRepo) Restore(uuid string) error {
 	return r.db.Model(&model.Video{}).
 		Where("uuid = ?", uuid).
@@ -140,6 +157,19 @@ func (r *VideoRepo) ListVariants(videoID uint) ([]model.VideoVariant, error) {
 
 func (r *VideoRepo) DeleteVariants(videoID uint) error {
 	return r.db.Where("video_id = ?", videoID).Delete(&model.VideoVariant{}).Error
+}
+
+func (r *VideoRepo) FindVariant(id uint) (*model.VideoVariant, error) {
+	var v model.VideoVariant
+	err := r.db.First(&v, id).Error
+	if err != nil {
+		return nil, err
+	}
+	return &v, nil
+}
+
+func (r *VideoRepo) DeleteVariant(id uint) error {
+	return r.db.Delete(&model.VideoVariant{}, id).Error
 }
 
 // Thumbnail operations

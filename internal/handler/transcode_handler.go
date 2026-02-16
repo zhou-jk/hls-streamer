@@ -107,6 +107,35 @@ func (h *TranscodeHandler) DeleteVariants(c *gin.Context) {
 	response.OK(c, gin.H{"message": "variants deleted"})
 }
 
+// DeleteVariant removes a single variant for a video.
+func (h *TranscodeHandler) DeleteVariant(c *gin.Context) {
+	uuid := c.Param("uuid")
+	id, err := strconv.ParseUint(c.Param("variant_id"), 10, 32)
+	if err != nil {
+		response.BadRequest(c, "invalid variant id")
+		return
+	}
+
+	if err := h.transcodeSvc.DeleteVariant(c.Request.Context(), uuid, uint(id)); err != nil {
+		response.InternalError(c, err.Error())
+		return
+	}
+
+	response.OK(c, gin.H{"message": "variant deleted"})
+}
+
+// DeleteVideo permanently removes a video and all associated data.
+func (h *TranscodeHandler) DeleteVideo(c *gin.Context) {
+	uuid := c.Param("uuid")
+
+	if err := h.transcodeSvc.DeleteVideo(c.Request.Context(), uuid); err != nil {
+		response.InternalError(c, err.Error())
+		return
+	}
+
+	response.NoContent(c)
+}
+
 // CancelTask cancels a pending or queued task.
 func (h *TranscodeHandler) CancelTask(c *gin.Context) {
 	taskUUID := c.Param("task_uuid")
