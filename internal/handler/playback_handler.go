@@ -84,3 +84,36 @@ func (h *PlaybackHandler) SubtitleFile(c *gin.Context) {
 
 	c.Redirect(http.StatusTemporaryRedirect, url)
 }
+
+// ThumbnailImage serves a thumbnail image.
+func (h *PlaybackHandler) ThumbnailImage(c *gin.Context) {
+	uuid := c.Param("uuid")
+	filename := c.Param("filename")
+
+	s3Key := fmt.Sprintf("videos/%s/thumbnails/%s", uuid, filename)
+	url, err := h.s3.PresignGetObject(c.Request.Context(), s3Key, 1*time.Hour)
+	if err != nil {
+		response.NotFound(c, "thumbnail not found")
+		return
+	}
+
+	c.Redirect(http.StatusTemporaryRedirect, url)
+}
+
+// DownloadOriginal redirects to a presigned URL for downloading the original video file.
+func (h *PlaybackHandler) DownloadOriginal(c *gin.Context) {
+	uuid := c.Param("uuid")
+	video, err := h.videoRepo.FindByUUID(uuid)
+	if err != nil || video.OriginalS3Key == "" {
+		response.NotFound(c, "video not found")
+		return
+	}
+
+	url, err := h.s3.PresignGetObject(c.Request.Context(), video.OriginalS3Key, 1*time.Hour)
+	if err != nil {
+		response.InternalError(c, "failed to generate download URL")
+		return
+	}
+
+	c.Redirect(http.StatusTemporaryRedirect, url)
+}

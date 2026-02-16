@@ -163,6 +163,8 @@ func Setup(cfg *config.Config, h Handlers) *gin.Engine {
 		play.GET("/:uuid/:variant/playlist.m3u8", h.Playback.VariantPlaylist)
 		play.GET("/:uuid/:variant/:segment", h.Playback.Segment)
 		play.GET("/:uuid/subtitles/:lang.vtt", h.Playback.SubtitleFile)
+		play.GET("/:uuid/thumbnails/:filename", h.Playback.ThumbnailImage)
+		play.GET("/:uuid/download", h.Playback.DownloadOriginal)
 	}
 
 	// Health check

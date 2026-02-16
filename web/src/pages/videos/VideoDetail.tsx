@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Tabs, Descriptions, Tag, Button, Form, Input, Select, Table, Space, Card, message, Popconfirm, Progress, Upload, Switch } from 'antd';
-import { ArrowLeftOutlined, UploadOutlined, InboxOutlined } from '@ant-design/icons';
+import { Tabs, Descriptions, Tag, Button, Form, Input, Select, Table, Space, Card, message, Popconfirm, Progress, Upload, Switch, Image } from 'antd';
+import { ArrowLeftOutlined, UploadOutlined, InboxOutlined, CopyOutlined, DownloadOutlined } from '@ant-design/icons';
 import { videosApi } from '../../api/videos';
 import type { Video, VideoTranslation, VideoVariant, Thumbnail, Subtitle, TranscodeTask } from '../../types';
 import axios from 'axios';
@@ -35,8 +35,15 @@ export default function VideoDetail() {
   const [subForm] = Form.useForm();
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploadDetail, setUploadDetail] = useState({ uploaded: 0, total: 0, speed: 0, part: 0, partCount: 0 });
   const [subUploading, setSubUploading] = useState(false);
   const subFileRef = useRef<File | null>(null);
+
+  const formatSize = (bytes: number) => {
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+    if (bytes < 1024 * 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+    return `${(bytes / 1024 / 1024 / 1024).toFixed(2)} GB`;
+  };
 
   const load = () => {
     if (!uuid) return;
@@ -66,9 +73,11 @@ export default function VideoDetail() {
     if (!uuid) return;
     setUploading(true);
     setUploadProgress(0);
+    setUploadDetail({ uploaded: 0, total: file.size, speed: 0, part: 0, partCount: 0 });
     try {
       const partCount = Math.ceil(file.size / PART_SIZE);
       const contentType = file.type || 'video/mp4';
+      setUploadDetail(d => ({ ...d, partCount }));
 
       // 1. Initiate multipart upload
       const initRes = await videosApi.initiateUpload(uuid, {
@@ -80,20 +89,36 @@ export default function VideoDetail() {
 
       // 2. Upload each part to presigned URL
       const parts: { part_number: number; etag: string }[] = [];
+      let totalUploaded = 0;
       for (let i = 1; i <= partCount; i++) {
         const start = (i - 1) * PART_SIZE;
         const end = Math.min(i * PART_SIZE, file.size);
         const blob = file.slice(start, end);
+        const partSize = end - start;
+
+        setUploadDetail(d => ({ ...d, part: i }));
+        const partStart = Date.now();
 
         const res = await axios.put(part_urls[i], blob, {
           headers: { 'Content-Type': contentType },
+          onUploadProgress: (e) => {
+            if (e.total) {
+              const partUploaded = e.loaded;
+              const currentTotal = totalUploaded + partUploaded;
+              const elapsed = (Date.now() - partStart) / 1000;
+              const speed = elapsed > 0 ? partUploaded / elapsed : 0;
+              setUploadDetail(d => ({ ...d, uploaded: currentTotal, speed }));
+              setUploadProgress(Math.round((currentTotal / file.size) * 90));
+            }
+          },
         });
         const etag = res.headers['etag'] || res.headers['ETag'] || '';
         parts.push({ part_number: i, etag: etag.replace(/"/g, '') });
-        setUploadProgress(Math.round((i / partCount) * 90));
+        totalUploaded += partSize;
       }
 
       // 3. Complete multipart upload
+      setUploadProgress(95);
       await videosApi.completeUpload(uuid, { upload_id, s3_key, parts });
       setUploadProgress(100);
       message.success('视频上传完成，已开始探测');
@@ -173,6 +198,25 @@ export default function VideoDetail() {
                   <Switch checked={video.is_public} onChange={async (checked) => { await videosApi.update(video.uuid, { is_public: checked }); message.success('已更新'); load(); }} />
                 </Descriptions.Item>
                 <Descriptions.Item label="播放次数">{video.view_count}</Descriptions.Item>
+                {video.status === 'ready' && (
+                  <Descriptions.Item label="播放地址">
+                    <Space>
+                      <a href={`/play/${video.uuid}/master.m3u8`} target="_blank" rel="noreferrer">/play/{video.uuid}/master.m3u8</a>
+                      <Button type="link" size="small" icon={<CopyOutlined />} onClick={() => {
+                        const url = `${window.location.origin}/play/${video.uuid}/master.m3u8`;
+                        navigator.clipboard.writeText(url);
+                        message.success('播放地址已复制');
+                      }} />
+                    </Space>
+                  </Descriptions.Item>
+                )}
+                {video.status !== 'draft' && (
+                  <Descriptions.Item label="下载原片">
+                    <Button type="link" size="small" icon={<DownloadOutlined />} href={`/play/${video.uuid}/download`} target="_blank">
+                      下载
+                    </Button>
+                  </Descriptions.Item>
+                )}
               </Descriptions>
               <Form layout="inline" initialValues={{ slug: video.slug, rating: video.rating }} onFinish={handleUpdate} form={editForm}>
                 <Form.Item name="slug" label="Slug"><Input /></Form.Item>
@@ -189,7 +233,20 @@ export default function VideoDetail() {
               {uploading ? (
                 <div style={{ textAlign: 'center', padding: 40 }}>
                   <Progress type="circle" percent={uploadProgress} />
-                  <p style={{ marginTop: 16 }}>正在上传视频文件...</p>
+                  <div style={{ marginTop: 16, color: '#666' }}>
+                    <p style={{ margin: '4px 0', fontSize: 16 }}>
+                      {formatSize(uploadDetail.uploaded)} / {formatSize(uploadDetail.total)}
+                    </p>
+                    <p style={{ margin: '4px 0' }}>
+                      分片 {uploadDetail.part} / {uploadDetail.partCount}
+                      {uploadDetail.speed > 0 && ` · ${formatSize(uploadDetail.speed)}/s`}
+                    </p>
+                    {uploadDetail.speed > 0 && uploadDetail.total > uploadDetail.uploaded && (
+                      <p style={{ margin: '4px 0', color: '#999' }}>
+                        预计剩余 {Math.ceil((uploadDetail.total - uploadDetail.uploaded) / uploadDetail.speed)}s
+                      </p>
+                    )}
+                  </div>
                 </div>
               ) : (
                 <Dragger
@@ -291,28 +348,26 @@ export default function VideoDetail() {
           children: (
             <Card>
               <Button type="primary" onClick={handleGenThumbnails} style={{ marginBottom: 16 }}>生成缩略图</Button>
-              <Table
-                dataSource={video.thumbnails || []}
-                rowKey="id"
-                size="small"
-                pagination={false}
-                columns={[
-                  { title: 'S3 Key', dataIndex: 's3_key', ellipsis: true },
-                  { title: '尺寸', render: (_: unknown, r: Thumbnail) => `${r.width}x${r.height}` },
-                  { title: '时间点', dataIndex: 'timestamp_s', render: (t: number) => `${t.toFixed(1)}s` },
-                  { title: '默认', dataIndex: 'is_default', render: (v: boolean) => v ? <Tag color="green">默认</Tag> : null },
-                  {
-                    title: '操作', render: (_: unknown, r: Thumbnail) => (
-                      <Space>
-                        {!r.is_default && <Button type="link" size="small" onClick={async () => { await videosApi.setDefaultThumbnail(video.uuid, r.id); message.success('已设为默认'); load(); }}>设为默认</Button>}
-                        <Popconfirm title="确认删除?" onConfirm={async () => { await videosApi.deleteThumbnail(video.uuid, r.id); message.success('已删除'); load(); }}>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16 }}>
+                {(video.thumbnails || []).map((t: Thumbnail) => {
+                  const filename = t.s3_key.split('/').pop();
+                  const imgUrl = `/play/${video.uuid}/thumbnails/${filename}`;
+                  return (
+                    <Card key={t.id} size="small" style={{ width: 200 }}
+                      cover={<Image src={imgUrl} alt={`thumbnail-${t.id}`} style={{ height: 120, objectFit: 'cover' }} />}
+                      actions={[
+                        !t.is_default ? <Button type="link" size="small" onClick={async () => { await videosApi.setDefaultThumbnail(video.uuid, t.id); message.success('已设为默认'); load(); }}>设为默认</Button> : <Tag color="green">默认</Tag>,
+                        <Popconfirm key="del" title="确认删除?" onConfirm={async () => { await videosApi.deleteThumbnail(video.uuid, t.id); message.success('已删除'); load(); }}>
                           <Button type="link" size="small" danger>删除</Button>
-                        </Popconfirm>
-                      </Space>
-                    ),
-                  },
-                ]}
-              />
+                        </Popconfirm>,
+                      ]}
+                    >
+                      <Card.Meta description={`${t.width}x${t.height} · ${t.timestamp_s.toFixed(1)}s`} />
+                    </Card>
+                  );
+                })}
+              </div>
+              {(video.thumbnails || []).length === 0 && <p style={{ color: '#999' }}>暂无缩略图，点击上方按钮生成</p>}
             </Card>
           ),
         },

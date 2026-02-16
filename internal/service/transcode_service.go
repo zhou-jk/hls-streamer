@@ -215,7 +215,169 @@ func (s *TranscodeService) UpdateProgress(taskUUID string, progress uint8) error
 }
 
 func (s *TranscodeService) CompleteTask(taskUUID string, result model.JSON) error {
-	return s.taskRepo.Complete(taskUUID, result)
+	task, err := s.taskRepo.FindByUUID(taskUUID)
+	if err != nil {
+		return err
+	}
+
+	if err := s.taskRepo.Complete(taskUUID, result); err != nil {
+		return err
+	}
+
+	// Post-completion processing based on task type
+	switch task.Type {
+	case "probe":
+		s.handleProbeResult(task, result)
+	case "thumbnail":
+		s.handleThumbnailResult(task, result)
+	case "transcode":
+		s.handleTranscodeResult(task, result)
+	}
+
+	return nil
+}
+
+func (s *TranscodeService) handleProbeResult(task *model.TranscodeTask, result model.JSON) {
+	var r struct {
+		Duration float64 `json:"duration"`
+		Width    int     `json:"width"`
+		Height   int     `json:"height"`
+		Codec    string  `json:"codec"`
+		FPS      float64 `json:"fps"`
+		FileSize int64   `json:"file_size"`
+	}
+	if err := json.Unmarshal(result, &r); err != nil {
+		return
+	}
+
+	video, err := s.videoRepo.FindByID(task.VideoID)
+	if err != nil {
+		return
+	}
+
+	if r.Duration > 0 {
+		video.DurationSeconds = &r.Duration
+	}
+	if r.Width > 0 {
+		w := uint(r.Width)
+		video.Width = &w
+	}
+	if r.Height > 0 {
+		h := uint(r.Height)
+		video.Height = &h
+	}
+	if r.Codec != "" {
+		video.Codec = r.Codec
+	}
+	if r.FPS > 0 {
+		video.FPS = &r.FPS
+	}
+	if r.FileSize > 0 {
+		video.FileSizeBytes = &r.FileSize
+	}
+
+	_ = s.videoRepo.Update(video)
+}
+
+func (s *TranscodeService) handleThumbnailResult(task *model.TranscodeTask, result model.JSON) {
+	var thumbResult struct {
+		Thumbnails []string `json:"thumbnails"`
+		Count      int      `json:"count"`
+	}
+	if err := json.Unmarshal(result, &thumbResult); err != nil {
+		return
+	}
+
+	var params struct {
+		Width  int `json:"width"`
+		Height int `json:"height"`
+	}
+	_ = json.Unmarshal(task.Params, &params)
+
+	video, _ := s.videoRepo.FindByID(task.VideoID)
+	duration := 0.0
+	if video != nil && video.DurationSeconds != nil {
+		duration = *video.DurationSeconds
+	}
+
+	for i, s3Key := range thumbResult.Thumbnails {
+		timestamp := 0.0
+		if duration > 0 && thumbResult.Count > 0 {
+			timestamp = duration * float64(i+1) / float64(thumbResult.Count+1)
+		}
+
+		thumb := &model.Thumbnail{
+			VideoID:    task.VideoID,
+			S3Key:      s3Key,
+			Width:      uint(params.Width),
+			Height:     uint(params.Height),
+			TimestampS: timestamp,
+			IsDefault:  i == 0,
+			SortOrder:  i,
+		}
+		_ = s.videoRepo.CreateThumbnail(thumb)
+	}
+}
+
+func (s *TranscodeService) handleTranscodeResult(task *model.TranscodeTask, result model.JSON) {
+	var r struct {
+		Resolution    string `json:"resolution"`
+		PlaylistS3Key string `json:"playlist_s3_key"`
+	}
+	if err := json.Unmarshal(result, &r); err != nil {
+		return
+	}
+
+	var params struct {
+		VideoUUID string `json:"video_uuid"`
+	}
+	_ = json.Unmarshal(task.Params, &params)
+
+	// Update variant status to ready
+	variants, _ := s.videoRepo.ListVariants(task.VideoID)
+	for _, v := range variants {
+		if v.ResolutionName == r.Resolution && v.Status == "processing" {
+			v.Status = "ready"
+			_ = s.videoRepo.UpdateVariant(&v)
+			break
+		}
+	}
+
+	// Check if all transcode tasks are done, build master playlist
+	s.checkAndBuildMasterPlaylist(task.VideoID, params.VideoUUID)
+}
+
+func (s *TranscodeService) checkAndBuildMasterPlaylist(videoID uint, videoUUID string) {
+	pending, err := s.taskRepo.CountPendingByVideo(videoID)
+	if err != nil || pending > 0 {
+		return
+	}
+
+	variants, err := s.videoRepo.ListVariants(videoID)
+	if err != nil {
+		return
+	}
+
+	var readyVariants []model.VideoVariant
+	for _, v := range variants {
+		if v.Status == "ready" {
+			readyVariants = append(readyVariants, v)
+		}
+	}
+
+	if len(readyVariants) == 0 {
+		_ = s.videoRepo.UpdateStatus(videoUUID, "error")
+		return
+	}
+
+	masterKey := fmt.Sprintf("videos/%s/master.m3u8", videoUUID)
+	video, err := s.videoRepo.FindByID(videoID)
+	if err != nil {
+		return
+	}
+	video.MasterPlaylistKey = &masterKey
+	video.Status = "ready"
+	_ = s.videoRepo.Update(video)
 }
 
 func (s *TranscodeService) FailTask(taskUUID, errMsg string) error {
