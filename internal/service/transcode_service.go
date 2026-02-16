@@ -98,6 +98,7 @@ func (s *TranscodeService) StartTranscode(ctx context.Context, videoUUID string,
 			paramMap["drm_key_id"] = drmKey.KeyID
 			paramMap["drm_content_key"] = drmKey.ContentKey
 			paramMap["drm_iv"] = drmKey.IV
+			paramMap["drm_license_url"] = drmKey.LicenseURL
 		}
 
 		params, _ := json.Marshal(paramMap)
@@ -124,6 +125,7 @@ func (s *TranscodeService) StartTranscode(ctx context.Context, videoUUID string,
 			BitrateKbps:    uint(res.BitrateKbps),
 			Codec:          req.Codec,
 			PlaylistS3Key:  fmt.Sprintf("videos/%s/variants/%s/playlist.m3u8", videoUUID, res.Name),
+			DRM:            req.DRM,
 			Status:         "processing",
 		}
 		_ = s.videoRepo.CreateOrUpdateVariant(variant)

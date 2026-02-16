@@ -3,6 +3,8 @@ package worker
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -158,6 +160,7 @@ func (w *Worker) handleTranscode(ctx context.Context, msg *queue.TaskMessage) er
 		DRMKeyID         string `json:"drm_key_id"`
 		DRMContentKey    string `json:"drm_content_key"`
 		DRMIV            string `json:"drm_iv"`
+		DRMLicenseURL    string `json:"drm_license_url"`
 	}
 	if err := json.Unmarshal(msg.Params, &params); err != nil {
 		return fmt.Errorf("unmarshal params: %w", err)
@@ -182,7 +185,7 @@ func (w *Worker) handleTranscode(ctx context.Context, msg *queue.TaskMessage) er
 		// DRM path: FFmpeg → MP4 → Shaka Packager → encrypted HLS
 		return w.transcodeDRM(ctx, msg.TaskUUID, workDir, inputFile, params.VideoUUID, params.VideoID, params.Resolution,
 			params.Width, params.Height, params.BitrateKbps, params.AudioBitrateKbps, params.Codec,
-			params.HasAudio, params.DRMKeyID, params.DRMContentKey, params.DRMIV)
+			params.HasAudio, params.DRMKeyID, params.DRMContentKey, params.DRMIV, params.DRMLicenseURL)
 	}
 
 	// Non-DRM path: FFmpeg → HLS → rename segments → upload
@@ -238,7 +241,7 @@ func (w *Worker) transcodeNormal(ctx context.Context, taskUUID, workDir, inputFi
 
 func (w *Worker) transcodeDRM(ctx context.Context, taskUUID, workDir, inputFile, videoUUID string, videoID uint,
 	resolution string, width, height, bitrateKbps, audioBitrateKbps int, codec string,
-	hasAudio bool, keyID, contentKey, iv string) error {
+	hasAudio bool, keyID, contentKey, iv, licenseURL string) error {
 
 	// Step 1: FFmpeg transcode to intermediate MP4 (not HLS)
 	intermediateMP4 := filepath.Join(workDir, "intermediate.mp4")
@@ -265,6 +268,14 @@ func (w *Worker) transcodeDRM(ctx context.Context, taskUUID, workDir, inputFile,
 
 	if err := w.shakaPackage(ctx, intermediateMP4, outputDir, hasAudio, keyID, contentKey, iv); err != nil {
 		return fmt.Errorf("shaka package: %w", err)
+	}
+
+	// Inject ClearKey EXT-X-KEY tag into the variant playlist so players know
+	// where to fetch the decryption key.
+	if licenseURL != "" {
+		if err := injectClearKeyTag(filepath.Join(outputDir, "playlist.m3u8"), licenseURL, keyID); err != nil {
+			slog.Warn("inject clearkey tag failed", "error", err)
+		}
 	}
 
 	w.reportProgress(taskUUID, 80)
@@ -342,6 +353,37 @@ func (w *Worker) shakaPackage(ctx context.Context, inputMP4, outputDir string, h
 	os.Remove(filepath.Join(outputDir, "audio.m3u8"))
 
 	return nil
+}
+
+// injectClearKeyTag reads an HLS playlist, adds a ClearKey EXT-X-KEY tag after
+// the #EXTM3U header, and writes it back. This tells the player where to fetch
+// the decryption key via the W3C ClearKey license protocol.
+func injectClearKeyTag(playlistPath, licenseURL, keyIDHex string) error {
+	data, err := os.ReadFile(playlistPath)
+	if err != nil {
+		return err
+	}
+
+	// Convert hex key ID to base64url for the URI query
+	keyIDBytes, err := hex.DecodeString(keyIDHex)
+	if err != nil {
+		return fmt.Errorf("decode key_id: %w", err)
+	}
+	keyIDB64 := base64.RawURLEncoding.EncodeToString(keyIDBytes)
+
+	// Build the ClearKey EXT-X-KEY tag.
+	// The URI points to our ClearKey license endpoint; the player will POST
+	// a {"kids":[...]} request to it and receive the key back.
+	clearKeyTag := fmt.Sprintf(
+		`#EXT-X-KEY:METHOD=SAMPLE-AES-CTR,URI="%s?kid=%s",KEYFORMAT="urn:uuid:e2719d58-a985-b3c9-781a-b030af78d30e",KEYFORMATVERSIONS="1"`,
+		licenseURL, keyIDB64,
+	)
+
+	content := string(data)
+	// Insert after #EXTM3U line
+	content = strings.Replace(content, "#EXTM3U\n", "#EXTM3U\n"+clearKeyTag+"\n", 1)
+
+	return os.WriteFile(playlistPath, []byte(content), 0644)
 }
 
 func (w *Worker) handleThumbnail(ctx context.Context, msg *queue.TaskMessage) error {

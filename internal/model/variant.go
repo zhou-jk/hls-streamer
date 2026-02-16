@@ -13,6 +13,7 @@ type VideoVariant struct {
 	PlaylistS3Key  string    `json:"playlist_s3_key" gorm:"size:1000;not null"`
 	SegmentCount   uint      `json:"segment_count" gorm:"default:0;not null"`
 	TotalSizeBytes int64     `json:"total_size_bytes" gorm:"default:0;not null"`
+	DRM            bool      `json:"drm" gorm:"default:false;not null"`
 	Status         string    `json:"status" gorm:"size:20;default:pending;not null"` // pending, processing, ready, error
 	CreatedAt      time.Time `json:"created_at"`
 }
