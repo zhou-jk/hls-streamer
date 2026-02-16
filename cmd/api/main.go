@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/redis/go-redis/v9"
+	"golang.org/x/crypto/bcrypt"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 
@@ -199,5 +200,23 @@ func seedDefaults(db *gorm.DB) {
 	}
 	for _, p := range presets {
 		db.FirstOrCreate(&p, "name = ?", p.Name)
+	}
+
+	// Seed default admin user
+	var count int64
+	db.Model(&model.User{}).Count(&count)
+	if count == 0 {
+		hash, err := bcrypt.GenerateFromPassword([]byte("admin123"), bcrypt.DefaultCost)
+		if err == nil {
+			admin := model.User{
+				Username:     "admin",
+				Email:        "admin@example.com",
+				PasswordHash: string(hash),
+				RoleID:       1,
+				IsActive:     true,
+			}
+			db.Create(&admin)
+			slog.Info("default admin user created", "username", "admin", "password", "admin123")
+		}
 	}
 }
