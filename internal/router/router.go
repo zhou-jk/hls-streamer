@@ -1,6 +1,9 @@
 package router
 
 import (
+	"os"
+	"path/filepath"
+
 	"github.com/gin-gonic/gin"
 
 	"github.com/Zhou-JK/hls-streamer/internal/config"
@@ -160,6 +163,32 @@ func Setup(cfg *config.Config, h Handlers) *gin.Engine {
 	r.GET("/health", func(c *gin.Context) {
 		c.JSON(200, gin.H{"status": "ok"})
 	})
+
+	// Serve frontend static files (SPA)
+	webDir := "/srv/web"
+	if _, err := os.Stat(webDir); err == nil {
+		r.Use(func(c *gin.Context) {
+			// Skip API and playback routes
+			p := c.Request.URL.Path
+			if len(p) >= 4 && p[:4] == "/api" || len(p) >= 5 && p[:5] == "/play" || p == "/health" {
+				c.Next()
+				return
+			}
+			// Try to serve static file
+			filePath := filepath.Join(webDir, p)
+			if info, err := os.Stat(filePath); err == nil && !info.IsDir() {
+				c.File(filePath)
+				c.Abort()
+				return
+			}
+			// SPA fallback: serve index.html
+			c.File(filepath.Join(webDir, "index.html"))
+			c.Abort()
+		})
+		r.NoRoute(func(c *gin.Context) {
+			c.File(filepath.Join(webDir, "index.html"))
+		})
+	}
 
 	return r
 }

@@ -23,13 +23,15 @@ type RegisterWorkerInput struct {
 }
 
 func (s *WorkerService) Register(input RegisterWorkerInput) error {
+	now := time.Now()
 	w := &model.Worker{
 		ID:            input.ID,
 		Hostname:      input.Hostname,
 		IPAddress:     input.IPAddress,
 		Capabilities:  input.Capabilities,
 		Status:        "online",
-		LastHeartbeat: time.Now(),
+		LastHeartbeat: now,
+		RegisteredAt:  now,
 	}
 	return s.workerRepo.Upsert(w)
 }

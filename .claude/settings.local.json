@@ -10,7 +10,8 @@
       "Bash(\"/c/Program Files/Docker/Docker/resources/bin/docker.exe\" compose up -d)",
       "Bash(export PATH=\"/c/Program Files/nodejs:$PATH\")",
       "Bash(npm install:*)",
-      "Bash(npm run build:*)"
+      "Bash(npm run build:*)",
+      "Bash(go vet:*)"
     ]
   }
 }
