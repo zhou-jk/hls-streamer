@@ -35,8 +35,8 @@ export default function VideoList() {
   const handleCreate = async (values: Record<string, string>) => {
     try {
       const res = await videosApi.create({
-        slug: values.slug,
-        original_filename: values.original_filename,
+        slug: '',
+        original_filename: '',
         language: values.language || 'en',
         title: values.title,
         description: values.description,
@@ -79,6 +79,7 @@ export default function VideoList() {
         columns={[
           { title: '标题', key: 'title', render: (_: unknown, r: Video) => r.translations?.[0]?.title || r.slug },
           { title: '状态', dataIndex: 'status', width: 120, render: (s: string) => <Tag color={statusColors[s]}>{s}</Tag> },
+          { title: '公开', dataIndex: 'is_public', width: 80, render: (v: boolean) => v ? <Tag color="green">是</Tag> : <Tag>否</Tag> },
           { title: '分辨率', key: 'res', width: 120, render: (_: unknown, r: Video) => r.width && r.height ? `${r.width}x${r.height}` : '-' },
           { title: '时长', dataIndex: 'duration_seconds', width: 100, render: (d?: number) => d ? `${Math.floor(d / 60)}:${String(Math.floor(d % 60)).padStart(2, '0')}` : '-' },
           { title: '创建时间', dataIndex: 'created_at', width: 120, render: (t: string) => new Date(t).toLocaleDateString() },
@@ -97,8 +98,6 @@ export default function VideoList() {
 
       <Modal title="新建视频" open={createOpen} onCancel={() => setCreateOpen(false)} onOk={() => form.submit()} destroyOnClose>
         <Form form={form} layout="vertical" onFinish={handleCreate}>
-          <Form.Item name="slug" label="Slug" rules={[{ required: true }]}><Input /></Form.Item>
-          <Form.Item name="original_filename" label="文件名" rules={[{ required: true }]}><Input placeholder="video.mp4" /></Form.Item>
           <Form.Item name="language" label="语言" initialValue="en"><Input /></Form.Item>
           <Form.Item name="title" label="标题" rules={[{ required: true }]}><Input /></Form.Item>
           <Form.Item name="description" label="描述"><Input.TextArea rows={3} /></Form.Item>

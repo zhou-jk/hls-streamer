@@ -55,5 +55,7 @@ func (s *WorkerService) SetOnline(workerID string) error {
 }
 
 func (s *WorkerService) List() ([]model.Worker, error) {
+	// Clean up stale workers before listing (30s timeout matches heartbeat interval)
+	_ = s.workerRepo.CleanupStale(30 * time.Second)
 	return s.workerRepo.List()
 }

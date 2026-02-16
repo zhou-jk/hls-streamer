@@ -35,6 +35,7 @@ export interface Video {
   codec: string;
   fps?: number;
   has_drm: boolean;
+  is_public: boolean;
   master_playlist_key?: string;
   release_date?: string;
   rating: string;

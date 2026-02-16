@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Tabs, Descriptions, Tag, Button, Form, Input, Select, Table, Space, Card, message, Popconfirm, Progress, Upload } from 'antd';
+import { Tabs, Descriptions, Tag, Button, Form, Input, Select, Table, Space, Card, message, Popconfirm, Progress, Upload, Switch } from 'antd';
 import { ArrowLeftOutlined, UploadOutlined, InboxOutlined } from '@ant-design/icons';
 import { videosApi } from '../../api/videos';
 import type { Video, VideoTranslation, VideoVariant, Thumbnail, Subtitle, TranscodeTask } from '../../types';
@@ -169,6 +169,9 @@ export default function VideoDetail() {
                 <Descriptions.Item label="FPS">{video.fps || '-'}</Descriptions.Item>
                 <Descriptions.Item label="文件大小">{video.file_size_bytes ? `${(video.file_size_bytes / 1024 / 1024).toFixed(1)} MB` : '-'}</Descriptions.Item>
                 <Descriptions.Item label="DRM">{video.has_drm ? '是' : '否'}</Descriptions.Item>
+                <Descriptions.Item label="公开">
+                  <Switch checked={video.is_public} onChange={async (checked) => { await videosApi.update(video.uuid, { is_public: checked }); message.success('已更新'); load(); }} />
+                </Descriptions.Item>
                 <Descriptions.Item label="播放次数">{video.view_count}</Descriptions.Item>
               </Descriptions>
               <Form layout="inline" initialValues={{ slug: video.slug, rating: video.rating }} onFinish={handleUpdate} form={editForm}>

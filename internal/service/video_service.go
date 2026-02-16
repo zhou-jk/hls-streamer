@@ -2,6 +2,7 @@ package service
 
 import (
 	"fmt"
+	"strconv"
 
 	"github.com/google/uuid"
 
@@ -18,10 +19,8 @@ func NewVideoService(videoRepo *repository.VideoRepo) *VideoService {
 }
 
 type CreateVideoInput struct {
-	Slug             string `json:"slug" binding:"required"`
-	OriginalFilename string `json:"original_filename" binding:"required"`
-	ReleaseDate      string `json:"release_date"`
-	Rating           string `json:"rating"`
+	ReleaseDate string `json:"release_date"`
+	Rating      string `json:"rating"`
 	// Initial translation
 	Language    string `json:"language" binding:"required"`
 	Title       string `json:"title" binding:"required"`
@@ -31,19 +30,25 @@ type CreateVideoInput struct {
 
 func (s *VideoService) Create(input CreateVideoInput, userID uint) (*model.Video, error) {
 	videoUUID := uuid.New().String()
-	s3Key := fmt.Sprintf("videos/%s/original/%s", videoUUID, input.OriginalFilename)
+	s3Key := fmt.Sprintf("videos/%s/original/video.mp4", videoUUID)
 
 	video := &model.Video{
 		UUID:             videoUUID,
-		Slug:             input.Slug,
+		Slug:             videoUUID,
 		Status:           "draft",
-		OriginalFilename: input.OriginalFilename,
+		OriginalFilename: "video.mp4",
 		OriginalS3Key:    s3Key,
 		Rating:           input.Rating,
 		CreatedBy:        userID,
 	}
 
 	if err := s.videoRepo.Create(video); err != nil {
+		return nil, err
+	}
+
+	// Set slug to auto-increment ID
+	video.Slug = strconv.FormatUint(uint64(video.ID), 10)
+	if err := s.videoRepo.Update(video); err != nil {
 		return nil, err
 	}
 
@@ -81,6 +86,7 @@ type UpdateVideoInput struct {
 	Rating      *string `json:"rating"`
 	ReleaseDate *string `json:"release_date"`
 	HasDRM      *bool   `json:"has_drm"`
+	IsPublic    *bool   `json:"is_public"`
 	SortOrder   *int    `json:"sort_order"`
 }
 
@@ -98,6 +104,9 @@ func (s *VideoService) Update(uuid string, input UpdateVideoInput) (*model.Video
 	}
 	if input.HasDRM != nil {
 		video.HasDRM = *input.HasDRM
+	}
+	if input.IsPublic != nil {
+		video.IsPublic = *input.IsPublic
 	}
 	if input.SortOrder != nil {
 		video.SortOrder = *input.SortOrder

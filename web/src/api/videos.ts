@@ -8,10 +8,10 @@ export const videosApi = {
   get: (uuid: string) =>
     client.get<ApiResponse<Video>>(`/api/v1/videos/${uuid}`),
 
-  create: (data: { slug: string; original_filename: string; language: string; title: string; description?: string; synopsis?: string; rating?: string; release_date?: string }) =>
+  create: (data: { slug?: string; original_filename?: string; language: string; title: string; description?: string; synopsis?: string; rating?: string; release_date?: string }) =>
     client.post<ApiResponse<Video>>('/api/v1/videos', data),
 
-  update: (uuid: string, data: Partial<{ slug: string; rating: string; release_date: string; has_drm: boolean; sort_order: number }>) =>
+  update: (uuid: string, data: Partial<{ slug: string; rating: string; release_date: string; has_drm: boolean; is_public: boolean; sort_order: number }>) =>
     client.put<ApiResponse<Video>>(`/api/v1/videos/${uuid}`, data),
 
   delete: (uuid: string) =>

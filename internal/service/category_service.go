@@ -1,6 +1,8 @@
 package service
 
 import (
+	"strconv"
+
 	"github.com/Zhou-JK/hls-streamer/internal/model"
 	"github.com/Zhou-JK/hls-streamer/internal/repository"
 )
@@ -16,7 +18,7 @@ func NewCategoryService(repo *repository.CategoryRepo) *CategoryService {
 // Input types
 
 type CreateCategoryInput struct {
-	Slug     string `json:"slug" binding:"required"`
+	Slug     string `json:"slug"`
 	ParentID *uint  `json:"parent_id"`
 }
 
@@ -27,14 +29,22 @@ type UpdateCategoryInput struct {
 }
 
 type CreateTagInput struct {
-	Slug string `json:"slug" binding:"required"`
+	Slug string `json:"slug"`
 }
 
 // Category
 
 func (s *CategoryService) CreateCategory(input CreateCategoryInput) (*model.Category, error) {
-	cat := &model.Category{Slug: input.Slug, ParentID: input.ParentID, IsActive: true}
+	cat := &model.Category{Slug: "tmp", ParentID: input.ParentID, IsActive: true}
 	if err := s.repo.CreateCategory(cat); err != nil {
+		return nil, err
+	}
+	if input.Slug == "" {
+		cat.Slug = strconv.FormatUint(uint64(cat.ID), 10)
+	} else {
+		cat.Slug = input.Slug
+	}
+	if err := s.repo.UpdateCategory(cat); err != nil {
 		return nil, err
 	}
 	return cat, nil
@@ -85,8 +95,16 @@ func (s *CategoryService) UpsertCategoryTranslation(categoryID uint, lang, name,
 // Tag
 
 func (s *CategoryService) CreateTag(input CreateTagInput) (*model.Tag, error) {
-	tag := &model.Tag{Slug: input.Slug}
+	tag := &model.Tag{Slug: "tmp"}
 	if err := s.repo.CreateTag(tag); err != nil {
+		return nil, err
+	}
+	if input.Slug == "" {
+		tag.Slug = strconv.FormatUint(uint64(tag.ID), 10)
+	} else {
+		tag.Slug = input.Slug
+	}
+	if err := s.repo.UpdateTag(tag); err != nil {
 		return nil, err
 	}
 	return tag, nil

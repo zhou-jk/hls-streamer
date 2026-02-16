@@ -67,6 +67,10 @@ func (r *CategoryRepo) DeleteTag(id uint) error {
 	return r.db.Delete(&model.Tag{}, id).Error
 }
 
+func (r *CategoryRepo) UpdateTag(t *model.Tag) error {
+	return r.db.Save(t).Error
+}
+
 func (r *CategoryRepo) UpsertTagTranslation(t *model.TagTranslation) error {
 	return r.db.Where("tag_id = ? AND language_code = ?", t.TagID, t.LanguageCode).
 		Assign(t).FirstOrCreate(t).Error
