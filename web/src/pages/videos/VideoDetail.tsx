@@ -28,6 +28,26 @@ const PART_SIZE = 10 * 1024 * 1024; // 10MB per part
 export default function VideoDetail() {
   const { uuid } = useParams<{ uuid: string }>();
   const navigate = useNavigate();
+
+  const copyToClipboard = (text: string) => {
+    if (navigator.clipboard?.writeText) {
+      navigator.clipboard.writeText(text).then(() => message.success('已复制'), () => fallbackCopy(text));
+    } else {
+      fallbackCopy(text);
+    }
+  };
+  const fallbackCopy = (text: string) => {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+    message.success('已复制');
+  };
+
   const [video, setVideo] = useState<Video | null>(null);
   const [tasks, setTasks] = useState<TranscodeTask[]>([]);
   const [transForm] = Form.useForm();
@@ -251,9 +271,7 @@ export default function VideoDetail() {
                     <Space>
                       <a href={`/play/${video.uuid}/master.m3u8`} target="_blank" rel="noreferrer">/play/{video.uuid}/master.m3u8</a>
                       <Button type="link" size="small" icon={<CopyOutlined />} onClick={() => {
-                        const url = `${window.location.origin}/play/${video.uuid}/master.m3u8`;
-                        navigator.clipboard.writeText(url);
-                        message.success('播放地址已复制');
+                        copyToClipboard(`${window.location.origin}/play/${video.uuid}/master.m3u8`);
                       }} />
                     </Space>
                   </Descriptions.Item>
@@ -297,9 +315,7 @@ export default function VideoDetail() {
                     </Link>
                     <Button icon={<DownloadOutlined />} href={`/play/${video.uuid}/download`} target="_blank">下载原片</Button>
                     <Button icon={<CopyOutlined />} onClick={() => {
-                      const url = `${window.location.origin}/play/${video.uuid}/master.m3u8`;
-                      navigator.clipboard.writeText(url);
-                      message.success('播放地址已复制');
+                      copyToClipboard(`${window.location.origin}/play/${video.uuid}/master.m3u8`);
                     }}>复制播放地址</Button>
                   </Space>
                 </div>

@@ -83,7 +83,7 @@ func (r *VideoRepo) List(params VideoListParams) ([]model.Video, int64, error) {
 }
 
 func (r *VideoRepo) Update(video *model.Video) error {
-	return r.db.Save(video).Error
+	return r.db.Omit("Translations", "Variants", "Thumbnails", "Subtitles", "Categories", "Tags", "Cast").Save(video).Error
 }
 
 func (r *VideoRepo) SoftDelete(uuid string) error {
