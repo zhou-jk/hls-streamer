@@ -280,6 +280,11 @@ func (w *Worker) transcodeDRM(ctx context.Context, taskUUID, workDir, inputFile,
 
 	w.reportProgress(taskUUID, 80)
 
+	// Rename .ts segments to configured extension (.jpeg) for CDN caching
+	if err := w.renameSegments(outputDir, w.cfg.HLS.SegmentExtension); err != nil {
+		return fmt.Errorf("rename segments: %w", err)
+	}
+
 	// Step 3: Upload encrypted output to S3
 	s3Prefix := fmt.Sprintf("videos/%s/variants/%s", videoUUID, resolution)
 	if err := w.uploadDirectory(ctx, outputDir, s3Prefix); err != nil {
