@@ -2,7 +2,10 @@ package service
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"fmt"
+	"path/filepath"
 	"time"
 
 	s3types "github.com/aws/aws-sdk-go-v2/service/s3/types"
@@ -28,7 +31,11 @@ type InitiateUploadResponse struct {
 
 // InitiateUpload creates a multipart upload and returns presigned URLs for each part.
 func (s *UploadService) InitiateUpload(ctx context.Context, videoUUID, filename, contentType string, partCount int) (*InitiateUploadResponse, error) {
-	s3Key := fmt.Sprintf("videos/%s/original/%s", videoUUID, filename)
+	// Randomize the S3 key to prevent guessing the original filename
+	randBytes := make([]byte, 16)
+	_, _ = rand.Read(randBytes)
+	ext := filepath.Ext(filename)
+	s3Key := fmt.Sprintf("videos/%s/original/%s%s", videoUUID, hex.EncodeToString(randBytes), ext)
 
 	uploadID, err := s.s3.CreateMultipartUpload(ctx, s3Key, contentType)
 	if err != nil {

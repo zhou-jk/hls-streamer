@@ -153,6 +153,7 @@ func (w *Worker) handleTranscode(ctx context.Context, msg *queue.TaskMessage) er
 		BitrateKbps      int    `json:"bitrate_kbps"`
 		AudioBitrateKbps int    `json:"audio_bitrate_kbps"`
 		Codec            string `json:"codec"`
+		HasAudio         bool   `json:"has_audio"`
 		DRM              bool   `json:"drm"`
 		DRMKeyID         string `json:"drm_key_id"`
 		DRMContentKey    string `json:"drm_content_key"`
@@ -181,16 +182,16 @@ func (w *Worker) handleTranscode(ctx context.Context, msg *queue.TaskMessage) er
 		// DRM path: FFmpeg → MP4 → Shaka Packager → encrypted HLS
 		return w.transcodeDRM(ctx, msg.TaskUUID, workDir, inputFile, params.VideoUUID, params.VideoID, params.Resolution,
 			params.Width, params.Height, params.BitrateKbps, params.AudioBitrateKbps, params.Codec,
-			params.DRMKeyID, params.DRMContentKey, params.DRMIV)
+			params.HasAudio, params.DRMKeyID, params.DRMContentKey, params.DRMIV)
 	}
 
 	// Non-DRM path: FFmpeg → HLS → rename segments → upload
 	return w.transcodeNormal(ctx, msg.TaskUUID, workDir, inputFile, params.VideoUUID, params.VideoID,
-		params.Resolution, params.Width, params.Height, params.BitrateKbps, params.AudioBitrateKbps, params.Codec)
+		params.Resolution, params.Width, params.Height, params.BitrateKbps, params.AudioBitrateKbps, params.Codec, params.HasAudio)
 }
 
 func (w *Worker) transcodeNormal(ctx context.Context, taskUUID, workDir, inputFile, videoUUID string, videoID uint,
-	resolution string, width, height, bitrateKbps, audioBitrateKbps int, codec string) error {
+	resolution string, width, height, bitrateKbps, audioBitrateKbps int, codec string, hasAudio bool) error {
 
 	hlsParams := ffmpeg.TranscodeHLSParams{
 		Input:           inputFile,
@@ -202,6 +203,7 @@ func (w *Worker) transcodeNormal(ctx context.Context, taskUUID, workDir, inputFi
 		VideoBitrate:    bitrateKbps,
 		AudioBitrate:    audioBitrateKbps,
 		Codec:           codec,
+		HasAudio:        hasAudio,
 		SegmentDuration: w.cfg.HLS.SegmentDuration,
 	}
 
@@ -236,7 +238,7 @@ func (w *Worker) transcodeNormal(ctx context.Context, taskUUID, workDir, inputFi
 
 func (w *Worker) transcodeDRM(ctx context.Context, taskUUID, workDir, inputFile, videoUUID string, videoID uint,
 	resolution string, width, height, bitrateKbps, audioBitrateKbps int, codec string,
-	keyID, contentKey, iv string) error {
+	hasAudio bool, keyID, contentKey, iv string) error {
 
 	// Step 1: FFmpeg transcode to intermediate MP4 (not HLS)
 	intermediateMP4 := filepath.Join(workDir, "intermediate.mp4")
@@ -248,6 +250,7 @@ func (w *Worker) transcodeDRM(ctx context.Context, taskUUID, workDir, inputFile,
 		VideoBitrate: bitrateKbps,
 		AudioBitrate: audioBitrateKbps,
 		Codec:        codec,
+		HasAudio:     hasAudio,
 	}); err != nil {
 		return fmt.Errorf("transcode to mp4: %w", err)
 	}
@@ -260,7 +263,7 @@ func (w *Worker) transcodeDRM(ctx context.Context, taskUUID, workDir, inputFile,
 		return err
 	}
 
-	if err := w.shakaPackage(ctx, intermediateMP4, outputDir, keyID, contentKey, iv); err != nil {
+	if err := w.shakaPackage(ctx, intermediateMP4, outputDir, hasAudio, keyID, contentKey, iv); err != nil {
 		return fmt.Errorf("shaka package: %w", err)
 	}
 
@@ -284,29 +287,28 @@ func (w *Worker) transcodeDRM(ctx context.Context, taskUUID, workDir, inputFile,
 }
 
 // shakaPackage uses Shaka Packager to encrypt an MP4 into HLS with CENC (ClearKey/Widevine compatible).
-func (w *Worker) shakaPackage(ctx context.Context, inputMP4, outputDir, keyID, contentKey, iv string) error {
+func (w *Worker) shakaPackage(ctx context.Context, inputMP4, outputDir string, hasAudio bool, keyID, contentKey, iv string) error {
 	playlistPath := filepath.Join(outputDir, "playlist.m3u8")
 	segmentTemplate := filepath.Join(outputDir, "segment_$Number$.ts")
 
 	// Build Shaka Packager command
-	// Format: packager 'in=input.mp4,stream=audio,segment_template=...,playlist_name=...'
-	//                   'in=input.mp4,stream=video,segment_template=...,playlist_name=...'
-	//         --enable_raw_key_encryption --keys key_id=...:key=... --iv ...
-	//         --hls_master_playlist_output playlist.m3u8
-	//         --protection_scheme cenc
+	var args []string
 
-	streamDesc := fmt.Sprintf(
-		"in=%s,stream=audio,segment_template=%s,playlist_name=audio.m3u8,hls_group_id=audio,hls_name=audio",
-		inputMP4, filepath.Join(outputDir, "audio_$Number$.ts"),
-	)
+	if hasAudio {
+		audioDesc := fmt.Sprintf(
+			"in=%s,stream=audio,segment_template=%s,playlist_name=audio.m3u8,hls_group_id=audio,hls_name=audio",
+			inputMP4, filepath.Join(outputDir, "audio_$Number$.ts"),
+		)
+		args = append(args, audioDesc)
+	}
+
 	videoDesc := fmt.Sprintf(
 		"in=%s,stream=video,segment_template=%s,playlist_name=video.m3u8",
 		inputMP4, segmentTemplate,
 	)
+	args = append(args, videoDesc)
 
-	args := []string{
-		streamDesc,
-		videoDesc,
+	args = append(args,
 		"--enable_raw_key_encryption",
 		"--keys", fmt.Sprintf("key_id=%s:key=%s", keyID, contentKey),
 		"--iv", iv,
@@ -314,7 +316,7 @@ func (w *Worker) shakaPackage(ctx context.Context, inputMP4, outputDir, keyID, c
 		"--hls_master_playlist_output", playlistPath,
 		"--segment_duration", fmt.Sprintf("%d", w.cfg.HLS.SegmentDuration),
 		"--temp_dir", w.cfg.Worker.TempDir,
-	}
+	)
 
 	slog.Info("running shaka packager", "args_count", len(args))
 

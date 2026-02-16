@@ -24,6 +24,7 @@ type Video struct {
 	FileSizeBytes     *int64     `json:"file_size_bytes"`
 	Codec             string     `json:"codec" gorm:"size:50"`
 	FPS               *float64   `json:"fps" gorm:"type:decimal(6,2)"`
+	HasAudio          bool       `json:"has_audio" gorm:"default:true;not null"`
 	HasDRM            bool       `json:"has_drm" gorm:"default:false;not null"`
 	IsPublic          bool       `json:"is_public" gorm:"default:false;not null;index"`
 	MasterPlaylistKey *string    `json:"master_playlist_key" gorm:"size:1000"`

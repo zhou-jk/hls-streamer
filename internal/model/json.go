@@ -36,7 +36,11 @@ func (j JSON) MarshalJSON() ([]byte, error) {
 	if len(j) == 0 {
 		return []byte("null"), nil
 	}
-	return []byte(j), nil
+	if json.Valid([]byte(j)) {
+		return []byte(j), nil
+	}
+	// Not valid JSON — wrap as a JSON string so serialization never fails.
+	return json.Marshal(string(j))
 }
 
 func (j *JSON) UnmarshalJSON(data []byte) error {

@@ -90,6 +90,7 @@ func (s *TranscodeService) StartTranscode(ctx context.Context, videoUUID string,
 			"audio_bitrate_kbps": res.AudioBitrate,
 			"codec":              req.Codec,
 			"drm":                req.DRM,
+			"has_audio":          video.HasAudio,
 		}
 
 		// Include DRM key material for the worker
@@ -270,6 +271,7 @@ func (s *TranscodeService) handleProbeResult(task *model.TranscodeTask, result m
 		Codec    string  `json:"codec"`
 		FPS      float64 `json:"fps"`
 		FileSize int64   `json:"file_size"`
+		HasAudio bool    `json:"has_audio"`
 	}
 	if err := json.Unmarshal(result, &r); err != nil {
 		return
@@ -300,6 +302,7 @@ func (s *TranscodeService) handleProbeResult(task *model.TranscodeTask, result m
 	if r.FileSize > 0 {
 		video.FileSizeBytes = &r.FileSize
 	}
+	video.HasAudio = r.HasAudio
 
 	// After probe, move from draft to uploaded (ready for transcoding)
 	if video.Status == "draft" {

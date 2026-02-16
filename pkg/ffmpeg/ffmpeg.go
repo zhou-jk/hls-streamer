@@ -31,6 +31,7 @@ type ProbeResult struct {
 	Codec    string  `json:"codec"`
 	FPS      float64 `json:"fps"`
 	FileSize int64   `json:"file_size"`
+	HasAudio bool    `json:"has_audio"`
 }
 
 // Probe runs ffprobe on the input file and returns metadata.
@@ -81,7 +82,9 @@ func (f *FFmpeg) Probe(ctx context.Context, input string) (*ProbeResult, error) 
 			result.Height = s.Height
 			result.Codec = s.CodecName
 			result.FPS = parseFrameRate(s.RFrameRate)
-			break
+		}
+		if s.CodecType == "audio" {
+			result.HasAudio = true
 		}
 	}
 
@@ -99,6 +102,7 @@ type TranscodeHLSParams struct {
 	VideoBitrate    int // kbps
 	AudioBitrate    int // kbps
 	Codec           string // h264, h265
+	HasAudio        bool
 	SegmentDuration int
 }
 
@@ -113,8 +117,13 @@ func (f *FFmpeg) TranscodeToHLS(ctx context.Context, p TranscodeHLSParams) error
 		"-i", p.Input,
 		"-c:v", codec,
 		"-b:v", fmt.Sprintf("%dk", p.VideoBitrate),
-		"-c:a", "aac",
-		"-b:a", fmt.Sprintf("%dk", p.AudioBitrate),
+	}
+	if p.HasAudio {
+		args = append(args, "-c:a", "aac", "-b:a", fmt.Sprintf("%dk", p.AudioBitrate))
+	} else {
+		args = append(args, "-an")
+	}
+	args = append(args,
 		"-vf", fmt.Sprintf("scale=%d:%d", p.Width, p.Height),
 		"-preset", "medium",
 		"-g", fmt.Sprintf("%d", p.SegmentDuration*30), // keyframe interval
@@ -125,7 +134,7 @@ func (f *FFmpeg) TranscodeToHLS(ctx context.Context, p TranscodeHLSParams) error
 		"-hls_segment_filename", fmt.Sprintf("%s/%s", p.OutputDir, p.SegmentPattern),
 		"-hls_playlist_type", "vod",
 		"-y",
-	}
+	)
 
 	if f.threads > 0 {
 		args = append([]string{"-threads", fmt.Sprintf("%d", f.threads)}, args...)
@@ -180,6 +189,7 @@ type TranscodeMP4Params struct {
 	VideoBitrate int // kbps
 	AudioBitrate int // kbps
 	Codec        string
+	HasAudio     bool
 }
 
 // TranscodeToMP4 transcodes the input to a single MP4 file (used before Shaka Packager for DRM).
@@ -193,13 +203,18 @@ func (f *FFmpeg) TranscodeToMP4(ctx context.Context, p TranscodeMP4Params) error
 		"-i", p.Input,
 		"-c:v", codec,
 		"-b:v", fmt.Sprintf("%dk", p.VideoBitrate),
-		"-c:a", "aac",
-		"-b:a", fmt.Sprintf("%dk", p.AudioBitrate),
+	}
+	if p.HasAudio {
+		args = append(args, "-c:a", "aac", "-b:a", fmt.Sprintf("%dk", p.AudioBitrate))
+	} else {
+		args = append(args, "-an")
+	}
+	args = append(args,
 		"-vf", fmt.Sprintf("scale=%d:%d", p.Width, p.Height),
 		"-preset", "medium",
 		"-movflags", "+faststart",
 		"-y",
-	}
+	)
 
 	if f.threads > 0 {
 		args = append([]string{"-threads", fmt.Sprintf("%d", f.threads)}, args...)
