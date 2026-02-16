@@ -110,13 +110,9 @@ func (h *TranscodeHandler) DeleteVariants(c *gin.Context) {
 // DeleteVariant removes a single variant for a video.
 func (h *TranscodeHandler) DeleteVariant(c *gin.Context) {
 	uuid := c.Param("uuid")
-	id, err := strconv.ParseUint(c.Param("variant_id"), 10, 32)
-	if err != nil {
-		response.BadRequest(c, "invalid variant id")
-		return
-	}
+	resolution := c.Param("resolution")
 
-	if err := h.transcodeSvc.DeleteVariant(c.Request.Context(), uuid, uint(id)); err != nil {
+	if err := h.transcodeSvc.DeleteVariant(c.Request.Context(), uuid, resolution); err != nil {
 		response.InternalError(c, err.Error())
 		return
 	}

@@ -125,7 +125,7 @@ func (s *TranscodeService) StartTranscode(ctx context.Context, videoUUID string,
 			PlaylistS3Key:  fmt.Sprintf("videos/%s/variants/%s/playlist.m3u8", videoUUID, res.Name),
 			Status:         "processing",
 		}
-		_ = s.videoRepo.CreateVariant(variant)
+		_ = s.videoRepo.CreateOrUpdateVariant(variant)
 
 		// Publish to Redis
 		msg := queue.TaskMessage{
@@ -461,18 +461,15 @@ func (s *TranscodeService) DeleteVariants(ctx context.Context, videoUUID string)
 }
 
 // DeleteVariant removes a single variant from DB and S3, rebuilds master playlist.
-func (s *TranscodeService) DeleteVariant(ctx context.Context, videoUUID string, variantID uint) error {
+func (s *TranscodeService) DeleteVariant(ctx context.Context, videoUUID string, resolution string) error {
 	video, err := s.videoRepo.FindByUUID(videoUUID)
 	if err != nil {
 		return fmt.Errorf("video not found: %w", err)
 	}
 
-	variant, err := s.videoRepo.FindVariant(variantID)
+	variant, err := s.videoRepo.FindVariantByResolution(video.ID, resolution)
 	if err != nil {
 		return fmt.Errorf("variant not found: %w", err)
-	}
-	if variant.VideoID != video.ID {
-		return fmt.Errorf("variant does not belong to this video")
 	}
 
 	// Delete variant files from S3
@@ -480,7 +477,7 @@ func (s *TranscodeService) DeleteVariant(ctx context.Context, videoUUID string, 
 	_ = s.s3.DeletePrefix(ctx, s3Prefix)
 
 	// Delete variant record from DB
-	if err := s.videoRepo.DeleteVariant(variantID); err != nil {
+	if err := s.videoRepo.DeleteVariant(variant.ID); err != nil {
 		return fmt.Errorf("delete variant record: %w", err)
 	}
 

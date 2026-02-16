@@ -141,8 +141,9 @@ func (r *VideoRepo) ListTranslations(videoID uint) ([]model.VideoTranslation, er
 
 // Variant operations
 
-func (r *VideoRepo) CreateVariant(v *model.VideoVariant) error {
-	return r.db.Create(v).Error
+func (r *VideoRepo) CreateOrUpdateVariant(v *model.VideoVariant) error {
+	return r.db.Where("video_id = ? AND resolution_name = ? AND codec = ?", v.VideoID, v.ResolutionName, v.Codec).
+		Assign(v).FirstOrCreate(v).Error
 }
 
 func (r *VideoRepo) UpdateVariant(v *model.VideoVariant) error {
@@ -157,6 +158,15 @@ func (r *VideoRepo) ListVariants(videoID uint) ([]model.VideoVariant, error) {
 
 func (r *VideoRepo) DeleteVariants(videoID uint) error {
 	return r.db.Where("video_id = ?", videoID).Delete(&model.VideoVariant{}).Error
+}
+
+func (r *VideoRepo) FindVariantByResolution(videoID uint, resolution string) (*model.VideoVariant, error) {
+	var v model.VideoVariant
+	err := r.db.Where("video_id = ? AND resolution_name = ?", videoID, resolution).First(&v).Error
+	if err != nil {
+		return nil, err
+	}
+	return &v, nil
 }
 
 func (r *VideoRepo) FindVariant(id uint) (*model.VideoVariant, error) {

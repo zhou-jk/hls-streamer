@@ -419,7 +419,7 @@ export default function VideoDetail() {
                   { title: '状态', dataIndex: 'status', render: (s: string) => <Tag color={statusColors[s]}>{s}</Tag> },
                   {
                     title: '操作', width: 80, render: (_: unknown, r: VideoVariant) => (
-                      <Popconfirm title={`确认删除 ${r.resolution_name} 变体？`} onConfirm={async () => { await videosApi.deleteVariant(video.uuid, r.id); message.success('变体已删除'); load(); }}>
+                      <Popconfirm title={`确认删除 ${r.resolution_name} 变体？`} onConfirm={async () => { await videosApi.deleteVariant(video.uuid, r.resolution_name); message.success('变体已删除'); load(); }}>
                         <Button type="link" size="small" danger>删除</Button>
                       </Popconfirm>
                     ),
@@ -438,7 +438,22 @@ export default function VideoDetail() {
                   { title: '状态', dataIndex: 'status', width: 100, render: (s: string) => <Tag color={statusColors[s]}>{s}</Tag> },
                   { title: '进度', dataIndex: 'progress', width: 200, render: (p: number) => <Progress percent={p} size="small" /> },
                   { title: 'Worker', dataIndex: 'worker_id', render: (w?: string) => w || '-' },
+                  { title: '错误', dataIndex: 'error_message', ellipsis: true, render: (e?: string) => e || '-' },
                   { title: '创建时间', dataIndex: 'created_at', render: (t: string) => new Date(t).toLocaleString() },
+                  {
+                    title: '操作', width: 120, render: (_: unknown, r: TranscodeTask) => (
+                      <Space size="small">
+                        {['pending', 'queued'].includes(r.status) && (
+                          <Popconfirm title="确认取消?" onConfirm={async () => { await videosApi.cancelTask(r.task_uuid); message.success('已取消'); load(); }}>
+                            <Button type="link" size="small" danger>取消</Button>
+                          </Popconfirm>
+                        )}
+                        {r.status === 'failed' && (
+                          <Button type="link" size="small" onClick={async () => { await videosApi.retryTask(r.task_uuid); message.success('已重试'); load(); }}>重试</Button>
+                        )}
+                      </Space>
+                    ),
+                  },
                 ]}
               />
             </Card>
