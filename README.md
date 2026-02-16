@@ -142,6 +142,7 @@ redis:
 
 s3:
   endpoint: "https://s3.amazonaws.com"
+  public_endpoint: "https://your-cdn-or-public-s3.example.com"  # 浏览器访问的 S3 地址
   region: us-east-1
   bucket: hls-videos
   access_key: "your-access-key"

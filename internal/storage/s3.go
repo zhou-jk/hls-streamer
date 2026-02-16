@@ -16,8 +16,9 @@ import (
 )
 
 type S3Client struct {
-	client *s3.Client
-	bucket string
+	client       *s3.Client
+	presignClient *s3.Client // uses public endpoint for browser-facing presigned URLs
+	bucket       string
 }
 
 func NewS3Client(cfg config.S3Config) (*S3Client, error) {
@@ -43,9 +44,24 @@ func NewS3Client(cfg config.S3Config) (*S3Client, error) {
 
 	client := s3.NewFromConfig(awsCfg, clientOpts...)
 
+	// Build a separate client for presigning with the public endpoint.
+	// If public_endpoint is not set, fall back to the same client.
+	presignClient := client
+	publicEndpoint := cfg.PublicEndpoint
+	if publicEndpoint == "" {
+		publicEndpoint = cfg.Endpoint
+	}
+	if publicEndpoint != cfg.Endpoint && publicEndpoint != "" {
+		presignClient = s3.NewFromConfig(awsCfg, func(o *s3.Options) {
+			o.BaseEndpoint = aws.String(publicEndpoint)
+			o.UsePathStyle = cfg.UsePathStyle
+		})
+	}
+
 	return &S3Client{
-		client: client,
-		bucket: cfg.Bucket,
+		client:        client,
+		presignClient: presignClient,
+		bucket:        cfg.Bucket,
 	}, nil
 }
 
@@ -111,7 +127,7 @@ func (s *S3Client) DeletePrefix(ctx context.Context, prefix string) error {
 }
 
 func (s *S3Client) PresignGetObject(ctx context.Context, key string, expires time.Duration) (string, error) {
-	presigner := s3.NewPresignClient(s.client)
+	presigner := s3.NewPresignClient(s.presignClient)
 	req, err := presigner.PresignGetObject(ctx, &s3.GetObjectInput{
 		Bucket: aws.String(s.bucket),
 		Key:    aws.String(key),
@@ -123,7 +139,7 @@ func (s *S3Client) PresignGetObject(ctx context.Context, key string, expires tim
 }
 
 func (s *S3Client) PresignPutObject(ctx context.Context, key, contentType string, expires time.Duration) (string, error) {
-	presigner := s3.NewPresignClient(s.client)
+	presigner := s3.NewPresignClient(s.presignClient)
 	req, err := presigner.PresignPutObject(ctx, &s3.PutObjectInput{
 		Bucket:      aws.String(s.bucket),
 		Key:         aws.String(key),
@@ -150,7 +166,7 @@ func (s *S3Client) CreateMultipartUpload(ctx context.Context, key, contentType s
 
 // PresignUploadPart returns a presigned URL for uploading a single part.
 func (s *S3Client) PresignUploadPart(ctx context.Context, key, uploadID string, partNumber int32, expires time.Duration) (string, error) {
-	presigner := s3.NewPresignClient(s.client)
+	presigner := s3.NewPresignClient(s.presignClient)
 	req, err := presigner.PresignUploadPart(ctx, &s3.UploadPartInput{
 		Bucket:     aws.String(s.bucket),
 		Key:        aws.String(key),

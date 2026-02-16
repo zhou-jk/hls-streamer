@@ -54,12 +54,13 @@ type RedisConfig struct {
 }
 
 type S3Config struct {
-	Endpoint     string `yaml:"endpoint"`
-	Region       string `yaml:"region"`
-	Bucket       string `yaml:"bucket"`
-	AccessKey    string `yaml:"access_key"`
-	SecretKey    string `yaml:"secret_key"`
-	UsePathStyle bool   `yaml:"use_path_style"`
+	Endpoint       string `yaml:"endpoint"`
+	PublicEndpoint string `yaml:"public_endpoint"` // public-facing endpoint for presigned URLs (browser access)
+	Region         string `yaml:"region"`
+	Bucket         string `yaml:"bucket"`
+	AccessKey      string `yaml:"access_key"`
+	SecretKey      string `yaml:"secret_key"`
+	UsePathStyle   bool   `yaml:"use_path_style"`
 }
 
 type JWTConfig struct {
