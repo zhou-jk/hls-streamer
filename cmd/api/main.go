@@ -36,10 +36,18 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Database
-	db, err := gorm.Open(mysql.Open(cfg.Database.DSN()), &gorm.Config{})
+	// Database (retry up to 30s for MySQL to be ready)
+	var db *gorm.DB
+	for i := range 30 {
+		db, err = gorm.Open(mysql.Open(cfg.Database.DSN()), &gorm.Config{})
+		if err == nil {
+			break
+		}
+		slog.Warn("waiting for database...", "attempt", i+1, "error", err)
+		time.Sleep(time.Second)
+	}
 	if err != nil {
-		slog.Error("failed to connect to database", "error", err)
+		slog.Error("failed to connect to database after retries", "error", err)
 		os.Exit(1)
 	}
 	sqlDB, _ := db.DB()
