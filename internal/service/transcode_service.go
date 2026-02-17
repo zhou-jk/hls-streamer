@@ -536,6 +536,49 @@ func (s *TranscodeService) DeleteVariant(ctx context.Context, videoUUID string, 
 	return s.videoRepo.Update(video)
 }
 
+// ToggleDRM switches DRM on or off for a video.
+// This deletes all existing variants and master playlist since they need to be re-transcoded.
+func (s *TranscodeService) ToggleDRM(ctx context.Context, videoUUID string, enableDRM bool, licenseBaseURL string) error {
+	video, err := s.videoRepo.FindByUUID(videoUUID)
+	if err != nil {
+		return fmt.Errorf("video not found: %w", err)
+	}
+
+	if video.HasDRM == enableDRM {
+		return nil // no change needed
+	}
+
+	// Delete variant files from S3
+	s3Prefix := fmt.Sprintf("videos/%s/variants/", videoUUID)
+	_ = s.s3.DeletePrefix(ctx, s3Prefix)
+
+	// Delete master playlist from S3
+	if video.MasterPlaylistKey != nil {
+		_ = s.s3.Delete(ctx, *video.MasterPlaylistKey)
+		video.MasterPlaylistKey = nil
+	}
+
+	// Delete variant records from DB
+	_ = s.videoRepo.DeleteVariants(video.ID)
+
+	if enableDRM && s.drmSvc != nil {
+		// Generate DRM keys if not already present
+		_, err := s.drmSvc.GenerateKeys(video.ID, licenseBaseURL)
+		if err != nil {
+			return fmt.Errorf("generate DRM keys: %w", err)
+		}
+	} else if !enableDRM && s.drmSvc != nil {
+		// Delete DRM keys
+		_ = s.drmSvc.DeleteByVideoID(video.ID)
+	}
+
+	video.HasDRM = enableDRM
+	if video.Status == "ready" || video.Status == "processing" || video.Status == "error" {
+		video.Status = "uploaded"
+	}
+	return s.videoRepo.Update(video)
+}
+
 // DeleteVideo permanently removes a video and all associated data from DB and S3.
 func (s *TranscodeService) DeleteVideo(ctx context.Context, videoUUID string) error {
 	video, err := s.videoRepo.FindByUUID(videoUUID)

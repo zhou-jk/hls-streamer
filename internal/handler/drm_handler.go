@@ -43,7 +43,7 @@ func (h *DRMHandler) GenerateKeys(c *gin.Context) {
 	response.Created(c, key)
 }
 
-// GetKeys returns the DRM key info for a video (without the content key).
+// GetKeys returns the DRM key info for a video (including content key for admin).
 func (h *DRMHandler) GetKeys(c *gin.Context) {
 	uuid := c.Param("uuid")
 	video, err := h.videoSvc.Get(uuid)
@@ -58,7 +58,17 @@ func (h *DRMHandler) GetKeys(c *gin.Context) {
 		return
 	}
 
-	response.OK(c, key)
+	// Return full key info including content_key and iv (admin endpoint)
+	response.OK(c, gin.H{
+		"id":          key.ID,
+		"video_id":    key.VideoID,
+		"key_id":      key.KeyID,
+		"content_key": key.ContentKey,
+		"iv":          key.IV,
+		"pssh_box":    key.PSSHBox,
+		"license_url": key.LicenseURL,
+		"created_at":  key.CreatedAt,
+	})
 }
 
 // ClearKeyLicense handles W3C ClearKey license requests.

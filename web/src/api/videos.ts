@@ -89,6 +89,13 @@ export const videosApi = {
   deleteCast: (uuid: string, id: number) =>
     client.delete(`/api/v1/videos/${uuid}/cast/${id}`),
 
+  // DRM
+  getDrmKeys: (uuid: string) =>
+    client.get<ApiResponse<{ key_id: string; content_key: string; iv: string; license_url: string; pssh_box: string }>>(`/api/v1/videos/${uuid}/drm/keys`),
+
+  toggleDrm: (uuid: string, enabled: boolean) =>
+    client.put(`/api/v1/videos/${uuid}/drm/toggle`, { enabled }),
+
   // Global tasks
   listAllTasks: (params?: { page?: number; per_page?: number; status?: string; type?: string }) =>
     client.get<ApiResponse<TranscodeTask[]>>('/api/v1/tasks', { params }),

@@ -51,6 +51,7 @@ export default function VideoDetail() {
 
   const [video, setVideo] = useState<Video | null>(null);
   const [tasks, setTasks] = useState<TranscodeTask[]>([]);
+  const [drmKeys, setDrmKeys] = useState<{ key_id: string; content_key: string; iv: string; license_url: string; pssh_box: string } | null>(null);
   const [transForm] = Form.useForm();
   const [transLang] = Form.useForm();
   const [editForm] = Form.useForm();
@@ -70,16 +71,19 @@ export default function VideoDetail() {
 
     const src = `/play/${video.uuid}/master.m3u8`;
     if (Hls.isSupported()) {
-      const hls = new Hls({
+      const hlsConfig: Partial<import('hls.js').HlsConfig> = {
         startLevel: -1,
         capLevelToPlayerSize: true,
-        emeEnabled: true,
-        drmSystems: {
+      };
+      if (video.has_drm) {
+        hlsConfig.emeEnabled = true;
+        hlsConfig.drmSystems = {
           'org.w3.clearkey': {
             licenseUrl: '/api/v1/drm/clearkey/license',
           },
-        },
-      });
+        };
+      }
+      const hls = new Hls(hlsConfig);
       previewHlsRef.current = hls;
       hls.loadSource(src);
       hls.attachMedia(previewRef.current);
@@ -125,7 +129,14 @@ export default function VideoDetail() {
 
   const load = () => {
     if (!uuid) return;
-    videosApi.get(uuid).then((r) => setVideo(r.data.data)).catch(() => message.error('Video not found'));
+    videosApi.get(uuid).then((r) => {
+      setVideo(r.data.data);
+      if (r.data.data?.has_drm) {
+        videosApi.getDrmKeys(uuid).then((dr) => setDrmKeys(dr.data.data)).catch(() => setDrmKeys(null));
+      } else {
+        setDrmKeys(null);
+      }
+    }).catch(() => message.error('Video not found'));
     videosApi.listTasks(uuid).then((r) => setTasks(r.data.data || [])).catch(() => {});
     settingsApi.list().then((r) => {
       const seg = (r.data.data || []).find((s) => s.key === 'hls_segment_duration');
@@ -275,7 +286,19 @@ export default function VideoDetail() {
                 <Descriptions.Item label="Duration">{video.duration_seconds ? `${Math.floor(video.duration_seconds / 60)}:${String(Math.floor(video.duration_seconds % 60)).padStart(2, '0')}` : '-'}</Descriptions.Item>
                 <Descriptions.Item label="FPS">{video.fps || '-'}</Descriptions.Item>
                 <Descriptions.Item label="File Size">{video.file_size_bytes ? `${(video.file_size_bytes / 1024 / 1024).toFixed(1)} MB` : '-'}</Descriptions.Item>
-                <Descriptions.Item label="DRM">{video.has_drm ? 'Yes' : 'No'}</Descriptions.Item>
+                <Descriptions.Item label="DRM">
+                  <Popconfirm
+                    title={video.has_drm ? 'Disable DRM?' : 'Enable DRM?'}
+                    description="All existing variants will be deleted and need to be re-transcoded."
+                    onConfirm={async () => {
+                      await videosApi.toggleDrm(video.uuid, !video.has_drm);
+                      message.success(video.has_drm ? 'DRM disabled' : 'DRM enabled');
+                      load();
+                    }}
+                  >
+                    <Switch checked={video.has_drm} />
+                  </Popconfirm>
+                </Descriptions.Item>
                 <Descriptions.Item label="Public">
                   <Switch checked={video.is_public} onChange={async (checked) => { await videosApi.update(video.uuid, { is_public: checked }); message.success('Updated'); load(); }} />
                 </Descriptions.Item>
@@ -298,6 +321,34 @@ export default function VideoDetail() {
                   </Descriptions.Item>
                 )}
               </Descriptions>
+              {video.has_drm && drmKeys && (
+                <Descriptions column={1} bordered size="small" title="DRM Keys" style={{ marginBottom: 24 }}>
+                  <Descriptions.Item label="Key ID">
+                    <Space>
+                      <code>{drmKeys.key_id}</code>
+                      <Button type="link" size="small" icon={<CopyOutlined />} onClick={() => copyToClipboard(drmKeys.key_id)} />
+                    </Space>
+                  </Descriptions.Item>
+                  <Descriptions.Item label="Content Key">
+                    <Space>
+                      <code>{drmKeys.content_key}</code>
+                      <Button type="link" size="small" icon={<CopyOutlined />} onClick={() => copyToClipboard(drmKeys.content_key)} />
+                    </Space>
+                  </Descriptions.Item>
+                  <Descriptions.Item label="IV">
+                    <Space>
+                      <code>{drmKeys.iv}</code>
+                      <Button type="link" size="small" icon={<CopyOutlined />} onClick={() => copyToClipboard(drmKeys.iv)} />
+                    </Space>
+                  </Descriptions.Item>
+                  <Descriptions.Item label="License URL">
+                    <Space>
+                      <code style={{ wordBreak: 'break-all' }}>{drmKeys.license_url}</code>
+                      <Button type="link" size="small" icon={<CopyOutlined />} onClick={() => copyToClipboard(drmKeys.license_url)} />
+                    </Space>
+                  </Descriptions.Item>
+                </Descriptions>
+              )}
               <Form layout="inline" initialValues={{ slug: video.slug, rating: video.rating }} onFinish={handleUpdate} form={editForm}>
                 <Form.Item name="slug" label="Slug"><Input /></Form.Item>
                 <Form.Item name="rating" label="Rating"><Input style={{ width: 80 }} /></Form.Item>

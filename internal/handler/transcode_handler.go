@@ -132,6 +132,32 @@ func (h *TranscodeHandler) DeleteVideo(c *gin.Context) {
 	response.NoContent(c)
 }
 
+// ToggleDRM enables or disables DRM for a video, deleting all variants in the process.
+func (h *TranscodeHandler) ToggleDRM(c *gin.Context) {
+	uuid := c.Param("uuid")
+
+	var input struct {
+		Enabled bool `json:"enabled"`
+	}
+	if err := c.ShouldBindJSON(&input); err != nil {
+		response.BadRequest(c, err.Error())
+		return
+	}
+
+	scheme := "http"
+	if c.Request.TLS != nil {
+		scheme = "https"
+	}
+	licenseBaseURL := scheme + "://" + c.Request.Host
+
+	if err := h.transcodeSvc.ToggleDRM(c.Request.Context(), uuid, input.Enabled, licenseBaseURL); err != nil {
+		response.InternalError(c, err.Error())
+		return
+	}
+
+	response.OK(c, gin.H{"message": "DRM toggled", "enabled": input.Enabled})
+}
+
 // CancelTask cancels a pending or queued task.
 func (h *TranscodeHandler) CancelTask(c *gin.Context) {
 	taskUUID := c.Param("task_uuid")

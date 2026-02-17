@@ -28,16 +28,19 @@ export default function VideoPlayer() {
     const src = `/play/${video.uuid}/master.m3u8`;
 
     if (Hls.isSupported()) {
-      const hls = new Hls({
+      const hlsConfig: Partial<import('hls.js').HlsConfig> = {
         startLevel: -1,
         capLevelToPlayerSize: true,
-        emeEnabled: true,
-        drmSystems: {
+      };
+      if (video.has_drm) {
+        hlsConfig.emeEnabled = true;
+        hlsConfig.drmSystems = {
           'org.w3.clearkey': {
             licenseUrl: '/api/v1/drm/clearkey/license',
           },
-        },
-      });
+        };
+      }
+      const hls = new Hls(hlsConfig);
       hlsRef.current = hls;
       hls.loadSource(src);
       hls.attachMedia(videoRef.current);

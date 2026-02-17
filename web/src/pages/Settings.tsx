@@ -12,9 +12,10 @@ export default function Settings() {
     setLoading(true);
     try {
       const res = await settingsApi.list();
-      setSettings(res.data.data || []);
+      const list: AppSetting[] = res.data.data || [];
+      setSettings(list);
       const values: Record<string, unknown> = {};
-      for (const s of res.data.data || []) {
+      for (const s of list) {
         if (s.value === 'true' || s.value === 'false') {
           values[s.key] = s.value === 'true';
         } else {
@@ -57,6 +58,7 @@ export default function Settings() {
           label="DRM Encryption"
           extra="When enabled, all new transcodes will be encrypted with ClearKey DRM."
           valuePropName="checked"
+          initialValue={false}
         >
           <Switch />
         </Form.Item>
