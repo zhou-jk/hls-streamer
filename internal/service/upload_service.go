@@ -37,6 +37,16 @@ func (s *UploadService) InitiateUpload(ctx context.Context, videoUUID, filename,
 	ext := filepath.Ext(filename)
 	s3Key := fmt.Sprintf("videos/%s/original/%s%s", videoUUID, hex.EncodeToString(randBytes), ext)
 
+	// Update the video's original_filename with the real filename
+	video, err := s.videoRepo.FindByUUID(videoUUID)
+	if err != nil {
+		return nil, fmt.Errorf("find video: %w", err)
+	}
+	video.OriginalFilename = filename
+	if err := s.videoRepo.Update(video); err != nil {
+		return nil, fmt.Errorf("update original filename: %w", err)
+	}
+
 	uploadID, err := s.s3.CreateMultipartUpload(ctx, s3Key, contentType)
 	if err != nil {
 		return nil, fmt.Errorf("create multipart upload: %w", err)
