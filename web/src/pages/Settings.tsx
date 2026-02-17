@@ -56,7 +56,7 @@ export default function Settings() {
         <Form.Item
           name="drm_enabled"
           label="DRM Encryption"
-          extra="When enabled, all new transcodes will be encrypted with ClearKey DRM."
+          extra="When enabled, all new transcodes will be encrypted with AES-128."
           valuePropName="checked"
           initialValue={false}
         >

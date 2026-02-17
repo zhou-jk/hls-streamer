@@ -91,7 +91,7 @@ export const videosApi = {
 
   // DRM
   getDrmKeys: (uuid: string) =>
-    client.get<ApiResponse<{ key_id: string; content_key: string; iv: string; license_url: string; pssh_box: string }>>(`/api/v1/videos/${uuid}/drm/keys`),
+    client.get<ApiResponse<{ key_id: string; content_key: string; iv: string; key_url: string }>>(`/api/v1/videos/${uuid}/drm/keys`),
 
   toggleDrm: (uuid: string, enabled: boolean) =>
     client.put(`/api/v1/videos/${uuid}/drm/toggle`, { enabled }),
