@@ -69,6 +69,41 @@ func (h *DRMHandler) GetKeys(c *gin.Context) {
 	})
 }
 
+// RegenerateKeys deletes existing DRM keys and generates new ones.
+func (h *DRMHandler) RegenerateKeys(c *gin.Context) {
+	uuid := c.Param("uuid")
+	video, err := h.videoSvc.Get(uuid)
+	if err != nil {
+		response.NotFound(c, "video not found")
+		return
+	}
+
+	// Delete old keys
+	_ = h.drmSvc.DeleteByVideoID(video.ID)
+
+	scheme := "http"
+	if c.Request.TLS != nil {
+		scheme = "https"
+	}
+	baseURL := scheme + "://" + c.Request.Host
+
+	key, err := h.drmSvc.GenerateKeys(video.ID, baseURL)
+	if err != nil {
+		response.InternalError(c, err.Error())
+		return
+	}
+
+	response.OK(c, gin.H{
+		"id":          key.ID,
+		"video_id":    key.VideoID,
+		"key_id":      key.KeyID,
+		"content_key": key.ContentKey,
+		"iv":          key.IV,
+		"key_url":     key.KeyURL,
+		"created_at":  key.CreatedAt,
+	})
+}
+
 // ServeKey serves the raw 16-byte AES key for HLS AES-128 decryption.
 // hls.js fetches this URI automatically when it encounters EXT-X-KEY:METHOD=AES-128.
 func (h *DRMHandler) ServeKey(c *gin.Context) {

@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { Tabs, Descriptions, Tag, Button, Form, Input, InputNumber, Select, Table, Space, Card, message, Popconfirm, Progress, Upload, Switch, Image } from 'antd';
-import { ArrowLeftOutlined, UploadOutlined, InboxOutlined, CopyOutlined, DownloadOutlined, PlayCircleOutlined, DeleteOutlined } from '@ant-design/icons';
+import { ArrowLeftOutlined, UploadOutlined, InboxOutlined, CopyOutlined, DownloadOutlined, PlayCircleOutlined, DeleteOutlined, ReloadOutlined } from '@ant-design/icons';
 import Hls from 'hls.js';
 import { videosApi } from '../../api/videos';
 import { settingsApi } from '../../api/settings';
@@ -313,7 +313,7 @@ export default function VideoDetail() {
                 )}
               </Descriptions>
               {video.has_drm && drmKeys && (
-                <Descriptions column={1} bordered size="small" title="DRM Keys" style={{ marginBottom: 24 }}>
+                <Descriptions column={1} bordered size="small" title={<Space>DRM Keys (AES-128)<Popconfirm title="Regenerate DRM keys?" description="Old keys will be deleted. Existing encrypted variants will need re-transcoding." onConfirm={async () => { const r = await videosApi.regenerateDrmKeys(video.uuid); setDrmKeys(r.data.data); message.success('DRM keys regenerated'); }}><Button size="small" icon={<ReloadOutlined />}>Regenerate</Button></Popconfirm></Space>} style={{ marginBottom: 24 }}>
                   <Descriptions.Item label="Key ID">
                     <Space>
                       <code>{drmKeys.key_id}</code>

@@ -25,10 +25,22 @@ func (s *DRMService) GenerateKeys(videoID uint, baseURL string) (*model.DRMKey, 
 	// Check if key already exists
 	existing, err := s.drmRepo.FindByVideoID(videoID)
 	if err == nil && existing != nil {
+		dirty := false
 		// Backfill KeyURL if empty or pointing to old endpoint
 		expectedURL := fmt.Sprintf("%s/api/v1/drm/key/%s", baseURL, existing.KeyID)
 		if existing.KeyURL == "" || strings.Contains(existing.KeyURL, "/clearkey/") {
 			existing.KeyURL = expectedURL
+			dirty = true
+		}
+		// Fix truncated IV (must be exactly 32 hex chars = 16 bytes)
+		if len(existing.IV) != 32 {
+			newIV, err := randomHex(16)
+			if err == nil {
+				existing.IV = newIV
+				dirty = true
+			}
+		}
+		if dirty {
 			_ = s.drmRepo.Update(existing)
 		}
 		return existing, nil

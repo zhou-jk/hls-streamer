@@ -266,8 +266,12 @@ func (w *Worker) transcodeDRM(ctx context.Context, taskUUID, workDir, inputFile,
 	// Format:
 	//   Line 1: Key URI (what goes into EXT-X-KEY URI= in the playlist)
 	//   Line 2: Path to local key file
-	//   Line 3: IV in hex
+	//   Line 3: IV in hex (must be exactly 32 hex chars = 16 bytes)
 	keyInfoFile := filepath.Join(workDir, "key_info.txt")
+	// Left-pad IV to 32 hex chars in case of truncated legacy values
+	for len(iv) < 32 {
+		iv = "0" + iv
+	}
 	keyInfoContent := fmt.Sprintf("%s\n%s\n0x%s\n", keyURL, keyFile, iv)
 	if err := os.WriteFile(keyInfoFile, []byte(keyInfoContent), 0600); err != nil {
 		return fmt.Errorf("write key info file: %w", err)

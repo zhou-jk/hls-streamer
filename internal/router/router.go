@@ -113,6 +113,7 @@ func Setup(cfg *config.Config, h Handlers) *gin.Engine {
 			// DRM
 			videos.POST("/:uuid/drm/keys", h.DRM.GenerateKeys)
 			videos.GET("/:uuid/drm/keys", h.DRM.GetKeys)
+			videos.POST("/:uuid/drm/keys/regenerate", h.DRM.RegenerateKeys)
 			videos.PUT("/:uuid/drm/toggle", h.Transcode.ToggleDRM)
 		}
 
