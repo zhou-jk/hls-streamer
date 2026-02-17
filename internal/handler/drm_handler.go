@@ -133,3 +133,49 @@ func (h *DRMHandler) ClearKeyLicense(c *gin.Context) {
 
 	c.JSON(200, resp)
 }
+
+// ClearKeyLicenseGET handles GET requests to the ClearKey license endpoint.
+// Supports ?kid=<base64url> query parameter for key lookup.
+func (h *DRMHandler) ClearKeyLicenseGET(c *gin.Context) {
+	kidB64 := c.Query("kid")
+	if kidB64 == "" {
+		c.JSON(400, gin.H{"error": "missing kid query parameter"})
+		return
+	}
+
+	kidBytes, err := base64.RawURLEncoding.DecodeString(kidB64)
+	if err != nil || len(kidBytes) != 16 {
+		c.JSON(400, gin.H{"error": "invalid kid parameter"})
+		return
+	}
+	kidHex := hex.EncodeToString(kidBytes)
+
+	key, err := h.drmSvc.GetKeyByID(kidHex)
+	if err != nil {
+		c.JSON(404, gin.H{"error": "no matching key found"})
+		return
+	}
+
+	contentKeyBytes, err := hex.DecodeString(key.ContentKey)
+	if err != nil {
+		c.JSON(500, gin.H{"error": "invalid content key"})
+		return
+	}
+
+	type clearKeyEntry struct {
+		Kty string `json:"kty"`
+		Kid string `json:"kid"`
+		K   string `json:"k"`
+	}
+
+	c.JSON(200, gin.H{
+		"keys": []clearKeyEntry{
+			{
+				Kty: "oct",
+				Kid: base64.RawURLEncoding.EncodeToString(kidBytes),
+				K:   base64.RawURLEncoding.EncodeToString(contentKeyBytes),
+			},
+		},
+		"type": "temporary",
+	})
+}

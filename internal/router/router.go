@@ -164,7 +164,9 @@ func Setup(cfg *config.Config, h Handlers) *gin.Engine {
 	// DRM License endpoints (public, called by players)
 	drm := api.Group("/drm")
 	{
+		// Support both POST (W3C ClearKey protocol) and GET (some player implementations)
 		drm.POST("/clearkey/license", h.DRM.ClearKeyLicense)
+		drm.GET("/clearkey/license", h.DRM.ClearKeyLicenseGET)
 	}
 
 	// Public video API (no auth, only public+ready videos)
