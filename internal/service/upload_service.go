@@ -94,12 +94,35 @@ func (s *UploadService) CompleteUpload(ctx context.Context, videoUUID string, re
 		return fmt.Errorf("complete multipart upload: %w", err)
 	}
 
-	// Update video's S3 key
 	video, err := s.videoRepo.FindByUUID(videoUUID)
 	if err != nil {
 		return err
 	}
+
+	// Delete old original file from S3 if it differs from the new one
+	if video.OriginalS3Key != "" && video.OriginalS3Key != req.S3Key {
+		_ = s.s3.Delete(ctx, video.OriginalS3Key)
+	}
+
+	// Delete existing variants and master playlist if re-uploading
+	if video.Status == "ready" || video.Status == "processing" || video.Status == "error" {
+		// Delete variant files from S3
+		variantPrefix := fmt.Sprintf("videos/%s/variants/", videoUUID)
+		_ = s.s3.DeletePrefix(ctx, variantPrefix)
+
+		// Delete master playlist from S3
+		if video.MasterPlaylistKey != nil {
+			_ = s.s3.Delete(ctx, *video.MasterPlaylistKey)
+			video.MasterPlaylistKey = nil
+		}
+
+		// Delete variant records from DB
+		_ = s.videoRepo.DeleteVariants(video.ID)
+	}
+
+	// Update video record
 	video.OriginalS3Key = req.S3Key
+	video.Status = "uploaded"
 	return s.videoRepo.Update(video)
 }
 
