@@ -118,7 +118,7 @@ func (s *TranscodeService) StartTranscode(ctx context.Context, videoUUID string,
 			paramMap["drm_key_id"] = drmKey.KeyID
 			paramMap["drm_content_key"] = drmKey.ContentKey
 			paramMap["drm_iv"] = drmKey.IV
-			paramMap["drm_license_url"] = drmKey.LicenseURL
+			paramMap["drm_key_url"] = drmKey.KeyURL
 		}
 
 		params, _ := json.Marshal(paramMap)

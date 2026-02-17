@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"encoding/base64"
 	"encoding/hex"
 
 	"github.com/gin-gonic/gin"
@@ -65,117 +64,28 @@ func (h *DRMHandler) GetKeys(c *gin.Context) {
 		"key_id":      key.KeyID,
 		"content_key": key.ContentKey,
 		"iv":          key.IV,
-		"pssh_box":    key.PSSHBox,
-		"license_url": key.LicenseURL,
+		"key_url":     key.KeyURL,
 		"created_at":  key.CreatedAt,
 	})
 }
 
-// ClearKeyLicense handles W3C ClearKey license requests.
-// The player sends a JSON request with "kids" (key IDs in base64url),
-// and we respond with the matching keys in the ClearKey format.
-//
-// Request:  {"kids": ["<base64url key_id>"], "type": "temporary"}
-// Response: {"keys": [{"kty":"oct","kid":"<base64url>","k":"<base64url>"}], "type":"temporary"}
-func (h *DRMHandler) ClearKeyLicense(c *gin.Context) {
-	type clearKeyRequest struct {
-		Kids []string `json:"kids"`
-		Type string   `json:"type"`
-	}
-	var req clearKeyRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(400, gin.H{"error": "invalid ClearKey request"})
-		return
-	}
+// ServeKey serves the raw 16-byte AES key for HLS AES-128 decryption.
+// hls.js fetches this URI automatically when it encounters EXT-X-KEY:METHOD=AES-128.
+func (h *DRMHandler) ServeKey(c *gin.Context) {
+	keyID := c.Param("key_id")
 
-	type clearKeyEntry struct {
-		Kty string `json:"kty"`
-		Kid string `json:"kid"`
-		K   string `json:"k"`
-	}
-	type clearKeyResponse struct {
-		Keys []clearKeyEntry `json:"keys"`
-		Type string          `json:"type"`
-	}
-
-	resp := clearKeyResponse{Type: "temporary"}
-
-	for _, kidB64 := range req.Kids {
-		// Decode base64url kid to raw bytes, then to hex for DB lookup
-		kidBytes, err := base64.RawURLEncoding.DecodeString(kidB64)
-		if err != nil || len(kidBytes) != 16 {
-			continue
-		}
-		kidHex := hex.EncodeToString(kidBytes)
-
-		key, err := h.drmSvc.GetKeyByID(kidHex)
-		if err != nil {
-			continue
-		}
-
-		// Decode content key from hex to raw bytes, then base64url encode
-		contentKeyBytes, err := hex.DecodeString(key.ContentKey)
-		if err != nil {
-			continue
-		}
-
-		resp.Keys = append(resp.Keys, clearKeyEntry{
-			Kty: "oct",
-			Kid: base64.RawURLEncoding.EncodeToString(kidBytes),
-			K:   base64.RawURLEncoding.EncodeToString(contentKeyBytes),
-		})
-	}
-
-	if len(resp.Keys) == 0 {
-		c.JSON(404, gin.H{"error": "no matching keys found"})
-		return
-	}
-
-	c.JSON(200, resp)
-}
-
-// ClearKeyLicenseGET handles GET requests to the ClearKey license endpoint.
-// Supports ?kid=<base64url> query parameter for key lookup.
-func (h *DRMHandler) ClearKeyLicenseGET(c *gin.Context) {
-	kidB64 := c.Query("kid")
-	if kidB64 == "" {
-		c.JSON(400, gin.H{"error": "missing kid query parameter"})
-		return
-	}
-
-	kidBytes, err := base64.RawURLEncoding.DecodeString(kidB64)
-	if err != nil || len(kidBytes) != 16 {
-		c.JSON(400, gin.H{"error": "invalid kid parameter"})
-		return
-	}
-	kidHex := hex.EncodeToString(kidBytes)
-
-	key, err := h.drmSvc.GetKeyByID(kidHex)
+	key, err := h.drmSvc.GetKeyByID(keyID)
 	if err != nil {
-		c.JSON(404, gin.H{"error": "no matching key found"})
+		c.Status(404)
 		return
 	}
 
-	contentKeyBytes, err := hex.DecodeString(key.ContentKey)
+	// Decode hex content key to raw 16 bytes
+	keyBytes, err := hex.DecodeString(key.ContentKey)
 	if err != nil {
-		c.JSON(500, gin.H{"error": "invalid content key"})
+		c.Status(500)
 		return
 	}
 
-	type clearKeyEntry struct {
-		Kty string `json:"kty"`
-		Kid string `json:"kid"`
-		K   string `json:"k"`
-	}
-
-	c.JSON(200, gin.H{
-		"keys": []clearKeyEntry{
-			{
-				Kty: "oct",
-				Kid: base64.RawURLEncoding.EncodeToString(kidBytes),
-				K:   base64.RawURLEncoding.EncodeToString(contentKeyBytes),
-			},
-		},
-		"type": "temporary",
-	})
+	c.Data(200, "application/octet-stream", keyBytes)
 }

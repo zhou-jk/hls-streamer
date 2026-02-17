@@ -31,19 +31,10 @@ export default function Watch() {
     const src = `/play/${video.uuid}/master.m3u8`;
 
     if (Hls.isSupported()) {
-      const hlsConfig: Partial<import('hls.js').HlsConfig> = {
+      const hls = new Hls({
         startLevel: -1,
         capLevelToPlayerSize: true,
-      };
-      if (video.has_drm) {
-        hlsConfig.emeEnabled = true;
-        hlsConfig.drmSystems = {
-          'org.w3.clearkey': {
-            licenseUrl: '/api/v1/drm/clearkey/license',
-          },
-        };
-      }
-      const hls = new Hls(hlsConfig);
+      });
       hlsRef.current = hls;
       hls.loadSource(src);
       hls.attachMedia(videoRef.current);

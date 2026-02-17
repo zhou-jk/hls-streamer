@@ -180,20 +180,29 @@ func (f *FFmpeg) ExtractThumbnails(ctx context.Context, input, outputDir string,
 	return nil
 }
 
-// TranscodeMP4Params contains parameters for MP4 transcoding (used as intermediate for DRM packaging).
-type TranscodeMP4Params struct {
-	Input        string
-	Output       string
-	Width        int
-	Height       int
-	VideoBitrate int // kbps
-	AudioBitrate int // kbps
-	Codec        string
-	HasAudio     bool
+// TranscodeEncryptedHLSParams contains parameters for AES-128 encrypted HLS transcoding.
+type TranscodeEncryptedHLSParams struct {
+	Input           string
+	OutputDir       string
+	PlaylistName    string
+	SegmentPattern  string
+	Width           int
+	Height          int
+	VideoBitrate    int // kbps
+	AudioBitrate    int // kbps
+	Codec           string
+	HasAudio        bool
+	SegmentDuration int
+	KeyInfoFile     string // path to key_info file for -hls_key_info_file
 }
 
-// TranscodeToMP4 transcodes the input to a single MP4 file (used before Shaka Packager for DRM).
-func (f *FFmpeg) TranscodeToMP4(ctx context.Context, p TranscodeMP4Params) error {
+// TranscodeToEncryptedHLS transcodes to AES-128 encrypted HLS using FFmpeg's native encryption.
+// The KeyInfoFile format:
+//
+//	Line 1: Key URI (URL the player will fetch the raw key from)
+//	Line 2: Key file path (local path to the 16-byte raw key file)
+//	Line 3: IV in hex (32 hex chars)
+func (f *FFmpeg) TranscodeToEncryptedHLS(ctx context.Context, p TranscodeEncryptedHLSParams) error {
 	codec := "libx264"
 	if p.Codec == "h265" || p.Codec == "hevc" {
 		codec = "libx265"
@@ -212,7 +221,14 @@ func (f *FFmpeg) TranscodeToMP4(ctx context.Context, p TranscodeMP4Params) error
 	args = append(args,
 		"-vf", fmt.Sprintf("scale=%d:%d", p.Width, p.Height),
 		"-preset", "medium",
-		"-movflags", "+faststart",
+		"-g", fmt.Sprintf("%d", p.SegmentDuration*30),
+		"-sc_threshold", "0",
+		"-f", "hls",
+		"-hls_time", fmt.Sprintf("%d", p.SegmentDuration),
+		"-hls_list_size", "0",
+		"-hls_segment_filename", fmt.Sprintf("%s/%s", p.OutputDir, p.SegmentPattern),
+		"-hls_playlist_type", "vod",
+		"-hls_key_info_file", p.KeyInfoFile,
 		"-y",
 	)
 
@@ -220,11 +236,11 @@ func (f *FFmpeg) TranscodeToMP4(ctx context.Context, p TranscodeMP4Params) error
 		args = append([]string{"-threads", fmt.Sprintf("%d", f.threads)}, args...)
 	}
 
-	args = append(args, p.Output)
+	args = append(args, fmt.Sprintf("%s/%s", p.OutputDir, p.PlaylistName))
 
 	cmd := exec.CommandContext(ctx, f.ffmpegPath, args...)
 	if output, err := cmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("ffmpeg transcode mp4: %w\noutput: %s", err, string(output))
+		return fmt.Errorf("ffmpeg transcode encrypted hls: %w\noutput: %s", err, string(output))
 	}
 
 	return nil

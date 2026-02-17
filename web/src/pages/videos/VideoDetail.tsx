@@ -51,7 +51,7 @@ export default function VideoDetail() {
 
   const [video, setVideo] = useState<Video | null>(null);
   const [tasks, setTasks] = useState<TranscodeTask[]>([]);
-  const [drmKeys, setDrmKeys] = useState<{ key_id: string; content_key: string; iv: string; license_url: string; pssh_box: string } | null>(null);
+  const [drmKeys, setDrmKeys] = useState<{ key_id: string; content_key: string; iv: string; key_url: string } | null>(null);
   const [transForm] = Form.useForm();
   const [transLang] = Form.useForm();
   const [editForm] = Form.useForm();
@@ -71,19 +71,10 @@ export default function VideoDetail() {
 
     const src = `/play/${video.uuid}/master.m3u8`;
     if (Hls.isSupported()) {
-      const hlsConfig: Partial<import('hls.js').HlsConfig> = {
+      const hls = new Hls({
         startLevel: -1,
         capLevelToPlayerSize: true,
-      };
-      if (video.has_drm) {
-        hlsConfig.emeEnabled = true;
-        hlsConfig.drmSystems = {
-          'org.w3.clearkey': {
-            licenseUrl: '/api/v1/drm/clearkey/license',
-          },
-        };
-      }
-      const hls = new Hls(hlsConfig);
+      });
       previewHlsRef.current = hls;
       hls.loadSource(src);
       hls.attachMedia(previewRef.current);
@@ -341,10 +332,10 @@ export default function VideoDetail() {
                       <Button type="link" size="small" icon={<CopyOutlined />} onClick={() => copyToClipboard(drmKeys.iv)} />
                     </Space>
                   </Descriptions.Item>
-                  <Descriptions.Item label="License URL">
+                  <Descriptions.Item label="Key URL">
                     <Space>
-                      <code style={{ wordBreak: 'break-all' }}>{drmKeys.license_url}</code>
-                      <Button type="link" size="small" icon={<CopyOutlined />} onClick={() => copyToClipboard(drmKeys.license_url)} />
+                      <code style={{ wordBreak: 'break-all' }}>{drmKeys.key_url}</code>
+                      <Button type="link" size="small" icon={<CopyOutlined />} onClick={() => copyToClipboard(drmKeys.key_url)} />
                     </Space>
                   </Descriptions.Item>
                 </Descriptions>

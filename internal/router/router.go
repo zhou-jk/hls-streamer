@@ -161,12 +161,10 @@ func Setup(cfg *config.Config, h Handlers) *gin.Engine {
 		workers.POST("/tasks/:task_uuid/fail", h.Worker.FailTask)
 	}
 
-	// DRM License endpoints (public, called by players)
+	// DRM key endpoint (public, called by hls.js for AES-128 decryption)
 	drm := api.Group("/drm")
 	{
-		// Support both POST (W3C ClearKey protocol) and GET (some player implementations)
-		drm.POST("/clearkey/license", h.DRM.ClearKeyLicense)
-		drm.GET("/clearkey/license", h.DRM.ClearKeyLicenseGET)
+		drm.GET("/key/:key_id", h.DRM.ServeKey)
 	}
 
 	// Public video API (no auth, only public+ready videos)
