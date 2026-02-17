@@ -250,6 +250,10 @@ func (r *VideoRepo) DeleteThumbnail(id uint) error {
 	return r.db.Delete(&model.Thumbnail{}, id).Error
 }
 
+func (r *VideoRepo) DeleteThumbnailsByVideoID(videoID uint) error {
+	return r.db.Where("video_id = ?", videoID).Delete(&model.Thumbnail{}).Error
+}
+
 // Subtitle operations
 
 func (r *VideoRepo) CreateSubtitle(s *model.Subtitle) error {

@@ -104,7 +104,7 @@ func (s *UploadService) CompleteUpload(ctx context.Context, videoUUID string, re
 		_ = s.s3.Delete(ctx, video.OriginalS3Key)
 	}
 
-	// Delete existing variants and master playlist if re-uploading
+	// Delete existing variants, thumbnails and master playlist if re-uploading
 	if video.Status == "ready" || video.Status == "processing" || video.Status == "error" {
 		// Delete variant files from S3
 		variantPrefix := fmt.Sprintf("videos/%s/variants/", videoUUID)
@@ -115,6 +115,11 @@ func (s *UploadService) CompleteUpload(ctx context.Context, videoUUID string, re
 			_ = s.s3.Delete(ctx, *video.MasterPlaylistKey)
 			video.MasterPlaylistKey = nil
 		}
+
+		// Delete thumbnails from S3 and DB
+		thumbPrefix := fmt.Sprintf("videos/%s/thumbnails/", videoUUID)
+		_ = s.s3.DeletePrefix(ctx, thumbPrefix)
+		_ = s.videoRepo.DeleteThumbnailsByVideoID(video.ID)
 
 		// Delete variant records from DB
 		_ = s.videoRepo.DeleteVariants(video.ID)
