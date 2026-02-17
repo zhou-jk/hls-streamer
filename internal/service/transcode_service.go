@@ -115,9 +115,14 @@ func (s *TranscodeService) StartTranscode(ctx context.Context, videoUUID string,
 
 		// Include DRM key material for the worker
 		if drmKey != nil {
+			// Ensure IV is exactly 32 hex chars (16 bytes) — pad if truncated
+			iv := drmKey.IV
+			for len(iv) < 32 {
+				iv = "0" + iv
+			}
 			paramMap["drm_key_id"] = drmKey.KeyID
 			paramMap["drm_content_key"] = drmKey.ContentKey
-			paramMap["drm_iv"] = drmKey.IV
+			paramMap["drm_iv"] = iv
 			paramMap["drm_key_url"] = drmKey.KeyURL
 		}
 
