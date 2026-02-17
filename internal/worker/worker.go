@@ -384,10 +384,11 @@ func injectClearKeyTag(playlistPath, licenseURL, keyIDHex string) error {
 	keyIDB64 := base64.RawURLEncoding.EncodeToString(keyIDBytes)
 
 	// Build the ClearKey EXT-X-KEY tag.
+	// KEYFORMAT must be "org.w3.clearkey" for hls.js to recognize it.
 	// The URI points to our ClearKey license endpoint; the player will POST
 	// a {"kids":[...]} request to it and receive the key back.
 	clearKeyTag := fmt.Sprintf(
-		`#EXT-X-KEY:METHOD=SAMPLE-AES-CTR,URI="%s?kid=%s",KEYFORMAT="urn:uuid:e2719d58-a985-b3c9-781a-b030af78d30e",KEYFORMATVERSIONS="1"`,
+		`#EXT-X-KEY:METHOD=SAMPLE-AES-CTR,URI="%s?kid=%s",KEYFORMAT="org.w3.clearkey",KEYFORMATVERSIONS="1"`,
 		licenseURL, keyIDB64,
 	)
 
