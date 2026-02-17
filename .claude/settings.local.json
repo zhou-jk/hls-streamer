@@ -15,7 +15,8 @@
       "Bash(npx tsc:*)",
       "Bash(grep:*)",
       "WebFetch(domain:github.com)",
-      "WebFetch(domain:raw.githubusercontent.com)"
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "WebFetch(domain:shaka-project.github.io)"
     ]
   }
 }

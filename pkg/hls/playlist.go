@@ -10,6 +10,7 @@ import (
 
 // RewritePlaylist reads an M3U8 playlist and rewrites segment references
 // to use the specified extension (e.g., ".jpeg" instead of ".ts").
+// It also rewrites EXT-X-MAP URI references for fMP4 init segments.
 func RewritePlaylist(r io.Reader, newExt string) (string, error) {
 	var b strings.Builder
 	scanner := bufio.NewScanner(r)

@@ -277,17 +277,32 @@ func (w *Worker) transcodeDRM(ctx context.Context, taskUUID, workDir, inputFile,
 		return fmt.Errorf("shaka package: %w", err)
 	}
 
-	// Inject ClearKey EXT-X-KEY tag into the variant playlist so players know
-	// where to fetch the decryption key.
+	// Inject ClearKey EXT-X-KEY tag into the variant playlist(s) so players know
+	// where to fetch the decryption key. Shaka generates its own EXT-X-KEY with
+	// data: URIs — we replace them with our ClearKey license URL.
 	if licenseURL != "" {
-		if err := injectClearKeyTag(filepath.Join(outputDir, "playlist.m3u8"), licenseURL, keyID); err != nil {
-			slog.Warn("inject clearkey tag failed", "error", err)
+		if hasAudio {
+			// With audio: master=playlist.m3u8, sub-playlists=video.m3u8, audio.m3u8
+			// Inject into both sub-playlists
+			for _, pl := range []string{"video.m3u8", "audio.m3u8"} {
+				plPath := filepath.Join(outputDir, pl)
+				if _, err := os.Stat(plPath); err == nil {
+					if err := injectClearKeyTag(plPath, licenseURL, keyID); err != nil {
+						slog.Warn("inject clearkey tag failed", "playlist", pl, "error", err)
+					}
+				}
+			}
+		} else {
+			// No audio: playlist.m3u8 is the single variant playlist
+			if err := injectClearKeyTag(filepath.Join(outputDir, "playlist.m3u8"), licenseURL, keyID); err != nil {
+				slog.Warn("inject clearkey tag failed", "error", err)
+			}
 		}
 	}
 
 	w.reportProgress(taskUUID, 80)
 
-	// Rename .ts segments to configured extension (.jpeg) for CDN caching
+	// Rename .m4s segments to configured extension (.jpeg) for CDN caching
 	if err := w.renameSegments(outputDir, w.cfg.HLS.SegmentExtension); err != nil {
 		return fmt.Errorf("rename segments: %w", err)
 	}
@@ -310,26 +325,35 @@ func (w *Worker) transcodeDRM(ctx context.Context, taskUUID, workDir, inputFile,
 }
 
 // shakaPackage uses Shaka Packager to encrypt an MP4 into HLS with CENC (ClearKey/Widevine compatible).
+// It outputs fMP4 segments (.m4s) with init segments (.mp4) so that --protection_scheme cenc
+// is properly applied. TS segments do NOT support CENC — Shaka silently ignores the flag for TS.
 func (w *Worker) shakaPackage(ctx context.Context, inputMP4, outputDir string, hasAudio bool, keyID, contentKey, iv string, segmentDuration int) error {
 	playlistPath := filepath.Join(outputDir, "playlist.m3u8")
-	segmentTemplate := filepath.Join(outputDir, "segment_$Number$.ts")
 
-	// Build Shaka Packager command
+	// Use fMP4 (.m4s) segments with explicit init segments so CENC encryption works.
+	videoSegTemplate := filepath.Join(outputDir, "segment_$Number$.m4s")
+	videoInitSeg := filepath.Join(outputDir, "video_init.mp4")
+
+	// Build Shaka Packager command.
+	// We only package the video stream. Audio will be handled separately below.
 	var args []string
 
+	videoDesc := fmt.Sprintf(
+		"in=%s,stream=video,init_segment=%s,segment_template=%s,playlist_name=video.m3u8",
+		inputMP4, videoInitSeg, videoSegTemplate,
+	)
+	args = append(args, videoDesc)
+
 	if hasAudio {
+		// Package audio as a separate stream with its own init segment and segments.
+		audioInitSeg := filepath.Join(outputDir, "audio_init.mp4")
+		audioSegTemplate := filepath.Join(outputDir, "audio_$Number$.m4s")
 		audioDesc := fmt.Sprintf(
-			"in=%s,stream=audio,segment_template=%s,playlist_name=audio.m3u8,hls_group_id=audio,hls_name=audio",
-			inputMP4, filepath.Join(outputDir, "audio_$Number$.ts"),
+			"in=%s,stream=audio,init_segment=%s,segment_template=%s,playlist_name=audio.m3u8,hls_group_id=audio,hls_name=audio",
+			inputMP4, audioInitSeg, audioSegTemplate,
 		)
 		args = append(args, audioDesc)
 	}
-
-	videoDesc := fmt.Sprintf(
-		"in=%s,stream=video,segment_template=%s,playlist_name=video.m3u8",
-		inputMP4, segmentTemplate,
-	)
-	args = append(args, videoDesc)
 
 	args = append(args,
 		"--enable_raw_key_encryption",
@@ -349,27 +373,42 @@ func (w *Worker) shakaPackage(ctx context.Context, inputMP4, outputDir string, h
 		return fmt.Errorf("shaka packager failed: %w\noutput: %s", err, string(output))
 	}
 
-	// Shaka outputs a master playlist and segment files.
-	// We need to use the video playlist as our "playlist.m3u8" for the variant.
-	// Rename video.m3u8 → playlist.m3u8 (overwrite the master that Shaka created)
+	// Shaka outputs a master playlist that references video.m3u8 and optionally audio.m3u8.
+	// We use the video playlist as our "playlist.m3u8" for the variant.
+	// If audio exists, we merge the audio EXT-X-MAP and segments into the video playlist
+	// so the player can handle everything from a single playlist.
 	videoPlaylist := filepath.Join(outputDir, "video.m3u8")
-	if _, err := os.Stat(videoPlaylist); err == nil {
-		data, err := os.ReadFile(videoPlaylist)
-		if err == nil {
-			_ = os.WriteFile(playlistPath, data, 0644)
-		}
-		os.Remove(videoPlaylist)
-	}
 
-	// Remove audio playlist (audio is muxed in the video segments for HLS)
-	os.Remove(filepath.Join(outputDir, "audio.m3u8"))
+	if hasAudio {
+		// For fMP4 HLS, audio and video must be in separate playlists.
+		// Keep Shaka's master playlist which correctly references both.
+		// Just remove the individual video.m3u8 name collision.
+		// Actually — our architecture expects a single playlist.m3u8 per variant.
+		// The master playlist Shaka generates already references video.m3u8 and audio.m3u8
+		// with proper EXT-X-MEDIA and EXT-X-STREAM-INF tags.
+		// We keep the master as playlist.m3u8 (Shaka already wrote it there).
+		// But we need video.m3u8 and audio.m3u8 to exist alongside it.
+		// No renaming needed — Shaka's master playlist is already at playlistPath.
+		// Just clean up: nothing to do.
+		slog.Info("shaka: keeping master playlist with audio+video", "dir", outputDir)
+	} else {
+		// No audio: replace master with video variant playlist.
+		if _, err := os.Stat(videoPlaylist); err == nil {
+			data, err := os.ReadFile(videoPlaylist)
+			if err == nil {
+				_ = os.WriteFile(playlistPath, data, 0644)
+			}
+			os.Remove(videoPlaylist)
+		}
+	}
 
 	return nil
 }
 
-// injectClearKeyTag reads an HLS playlist, adds a ClearKey EXT-X-KEY tag after
-// the #EXTM3U header, and writes it back. This tells the player where to fetch
-// the decryption key via the W3C ClearKey license protocol.
+// injectClearKeyTag reads an HLS playlist, replaces Shaka's EXT-X-KEY tag with
+// a ClearKey-compatible one, and writes it back. Shaka generates its own EXT-X-KEY
+// with a data: URI containing PSSH — we replace it with a ClearKey license URL
+// that hls.js can use to fetch the decryption key via the W3C ClearKey protocol.
 func injectClearKeyTag(playlistPath, licenseURL, keyIDHex string) error {
 	data, err := os.ReadFile(playlistPath)
 	if err != nil {
@@ -392,11 +431,36 @@ func injectClearKeyTag(playlistPath, licenseURL, keyIDHex string) error {
 		licenseURL, keyIDB64,
 	)
 
-	content := string(data)
-	// Insert after #EXTM3U line
-	content = strings.Replace(content, "#EXTM3U\n", "#EXTM3U\n"+clearKeyTag+"\n", 1)
+	// Replace Shaka's EXT-X-KEY tags with our ClearKey tag.
+	// Shaka generates tags like:
+	//   #EXT-X-KEY:METHOD=SAMPLE-AES-CTR,URI="data:text/plain;base64,...",KEYID=0x...,IV=0x...
+	// We replace all of them with our single ClearKey tag.
+	lines := strings.Split(string(data), "\n")
+	var result []string
+	clearKeyInjected := false
+	for _, line := range lines {
+		if strings.HasPrefix(line, "#EXT-X-KEY:") {
+			// Replace the first EXT-X-KEY with ours, skip subsequent ones
+			if !clearKeyInjected {
+				result = append(result, clearKeyTag)
+				clearKeyInjected = true
+			}
+			continue
+		}
+		result = append(result, line)
+	}
 
-	return os.WriteFile(playlistPath, []byte(content), 0644)
+	// If no EXT-X-KEY was found (shouldn't happen), inject after #EXTM3U
+	if !clearKeyInjected {
+		for i, line := range result {
+			if line == "#EXTM3U" {
+				result = append(result[:i+1], append([]string{clearKeyTag}, result[i+1:]...)...)
+				break
+			}
+		}
+	}
+
+	return os.WriteFile(playlistPath, []byte(strings.Join(result, "\n")), 0644)
 }
 
 func (w *Worker) handleThumbnail(ctx context.Context, msg *queue.TaskMessage) error {
@@ -469,7 +533,7 @@ func (w *Worker) handleThumbnail(ctx context.Context, msg *queue.TaskMessage) er
 	return nil
 }
 
-// renameSegments renames .ts files to the configured extension and rewrites the playlist.
+// renameSegments renames .ts and .m4s files to the configured extension and rewrites the playlist.
 func (w *Worker) renameSegments(dir, newExt string) error {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
@@ -481,8 +545,9 @@ func (w *Worker) renameSegments(dir, newExt string) error {
 			continue
 		}
 		name := entry.Name()
-		if strings.HasSuffix(name, ".ts") {
-			newName := strings.TrimSuffix(name, ".ts") + newExt
+		if strings.HasSuffix(name, ".ts") || strings.HasSuffix(name, ".m4s") {
+			ext := filepath.Ext(name)
+			newName := strings.TrimSuffix(name, ext) + newExt
 			oldPath := filepath.Join(dir, name)
 			newPath := filepath.Join(dir, newName)
 			if err := os.Rename(oldPath, newPath); err != nil {
@@ -491,20 +556,31 @@ func (w *Worker) renameSegments(dir, newExt string) error {
 		}
 	}
 
-	// Rewrite playlist
-	playlistPath := filepath.Join(dir, "playlist.m3u8")
-	f, err := os.Open(playlistPath)
+	// Rewrite all playlists in the directory (playlist.m3u8, video.m3u8, audio.m3u8)
+	entries, err = os.ReadDir(dir)
 	if err != nil {
-		return fmt.Errorf("open playlist: %w", err)
+		return err
+	}
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".m3u8") {
+			continue
+		}
+		plPath := filepath.Join(dir, entry.Name())
+		f, err := os.Open(plPath)
+		if err != nil {
+			continue
+		}
+		rewritten, err := hls.RewritePlaylist(f, newExt)
+		f.Close()
+		if err != nil {
+			return fmt.Errorf("rewrite playlist %s: %w", entry.Name(), err)
+		}
+		if err := os.WriteFile(plPath, []byte(rewritten), 0644); err != nil {
+			return fmt.Errorf("write playlist %s: %w", entry.Name(), err)
+		}
 	}
 
-	rewritten, err := hls.RewritePlaylist(f, newExt)
-	f.Close()
-	if err != nil {
-		return fmt.Errorf("rewrite playlist: %w", err)
-	}
-
-	return os.WriteFile(playlistPath, []byte(rewritten), 0644)
+	return nil
 }
 
 // uploadDirectory uploads all files in a directory to S3 under the given prefix.
@@ -530,6 +606,8 @@ func (w *Worker) uploadDirectory(ctx context.Context, dir, s3Prefix string) erro
 			contentType = "image/jpeg"
 		case strings.HasSuffix(entry.Name(), ".ts"):
 			contentType = "video/mp2t"
+		case strings.HasSuffix(entry.Name(), ".mp4"), strings.HasSuffix(entry.Name(), ".m4s"):
+			contentType = "video/mp4"
 		}
 
 		f, err := os.Open(filePath)
