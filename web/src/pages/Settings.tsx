@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Form, InputNumber, Button, Card, message, Spin, Descriptions } from 'antd';
+import { Form, InputNumber, Switch, Button, Card, message, Spin, Descriptions } from 'antd';
 import { settingsApi, type AppSetting } from '../api/settings';
 
 export default function Settings() {
@@ -13,9 +13,13 @@ export default function Settings() {
     try {
       const res = await settingsApi.list();
       setSettings(res.data.data || []);
-      const values: Record<string, number> = {};
+      const values: Record<string, unknown> = {};
       for (const s of res.data.data || []) {
-        values[s.key] = parseInt(s.value, 10);
+        if (s.value === 'true' || s.value === 'false') {
+          values[s.key] = s.value === 'true';
+        } else {
+          values[s.key] = parseInt(s.value, 10);
+        }
       }
       form.setFieldsValue(values);
     } finally {
@@ -25,7 +29,7 @@ export default function Settings() {
 
   useEffect(() => { load(); }, []);
 
-  const handleSave = async (values: Record<string, number>) => {
+  const handleSave = async (values: Record<string, unknown>) => {
     setSaving(true);
     try {
       for (const s of settings) {
@@ -48,6 +52,15 @@ export default function Settings() {
   return (
     <Card title="Settings">
       <Form form={form} layout="vertical" onFinish={handleSave} style={{ maxWidth: 480 }}>
+        <Form.Item
+          name="drm_enabled"
+          label="DRM Encryption"
+          extra="When enabled, all new transcodes will be encrypted with ClearKey DRM."
+          valuePropName="checked"
+        >
+          <Switch />
+        </Form.Item>
+
         <Form.Item
           name="hls_segment_duration"
           label="HLS Segment Duration (seconds)"

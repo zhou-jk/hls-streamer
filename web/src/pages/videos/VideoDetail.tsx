@@ -213,9 +213,9 @@ export default function VideoDetail() {
     }
   };
 
-  const handleTranscode = async (values: { resolutions: string[]; codec: string; drm: boolean; segment_duration: number }) => {
+  const handleTranscode = async (values: { resolutions: string[]; codec: string; segment_duration: number }) => {
     const resolutions = PRESETS.filter((p) => values.resolutions.includes(p.name));
-    await videosApi.startTranscode(video.uuid, { resolutions, codec: values.codec || 'h264', drm: values.drm || false, segment_duration: values.segment_duration });
+    await videosApi.startTranscode(video.uuid, { resolutions, codec: values.codec || 'h264', segment_duration: values.segment_duration });
     message.success('Transcode tasks created');
     load();
   };
@@ -422,9 +422,6 @@ export default function VideoDetail() {
                 </Form.Item>
                 <Form.Item name="codec" label="Codec" initialValue="h264">
                   <Select style={{ width: 100 }} options={[{ value: 'h264' }, { value: 'h265' }]} />
-                </Form.Item>
-                <Form.Item name="drm" label="DRM Encryption" valuePropName="checked" initialValue={false}>
-                  <Switch />
                 </Form.Item>
                 <Form.Item name="segment_duration" label="Segment Duration" initialValue={6}>
                   <InputNumber min={1} max={60} addonAfter="s" style={{ width: 100 }} />

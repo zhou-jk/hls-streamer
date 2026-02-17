@@ -38,7 +38,7 @@ export const videosApi = {
     client.post(`/api/v1/videos/${uuid}/upload/complete`, data),
 
   // Transcode
-  startTranscode: (uuid: string, data: { resolutions: Array<{ name: string; width: number; height: number; bitrate_kbps: number; audio_bitrate_kbps?: number }>; codec?: string; drm?: boolean; segment_duration?: number }) =>
+  startTranscode: (uuid: string, data: { resolutions: Array<{ name: string; width: number; height: number; bitrate_kbps: number; audio_bitrate_kbps?: number }>; codec?: string; segment_duration?: number }) =>
     client.post(`/api/v1/videos/${uuid}/transcode`, data),
 
   listTasks: (uuid: string) =>

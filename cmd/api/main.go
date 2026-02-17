@@ -238,6 +238,7 @@ func seedDefaults(db *gorm.DB) {
 	// Seed default app settings
 	defaultSettings := []model.AppSetting{
 		{Key: "hls_segment_duration", Value: "6", Description: "HLS segment duration in seconds"},
+		{Key: "drm_enabled", Value: "false", Description: "Enable DRM encryption for all transcodes"},
 	}
 	for _, s := range defaultSettings {
 		db.FirstOrCreate(&s, "`key` = ?", s.Key)

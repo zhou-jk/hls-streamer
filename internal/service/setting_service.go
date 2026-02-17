@@ -35,6 +35,18 @@ func (s *SettingService) GetInt(key string, fallback int) int {
 	return v
 }
 
+func (s *SettingService) GetBool(key string, fallback bool) bool {
+	setting, err := s.repo.Get(key)
+	if err != nil {
+		return fallback
+	}
+	v, err := strconv.ParseBool(setting.Value)
+	if err != nil {
+		return fallback
+	}
+	return v
+}
+
 func (s *SettingService) Update(key, value string) error {
 	return s.repo.Set(key, value)
 }

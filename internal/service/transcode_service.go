@@ -41,7 +41,6 @@ type StartTranscodeInput = TranscodeRequest
 type TranscodeRequest struct {
 	Resolutions     []ResolutionSpec `json:"resolutions" binding:"required,min=1"`
 	Codec           string           `json:"codec"`
-	DRM             bool             `json:"drm"`
 	SegmentDuration int              `json:"segment_duration"`
 }
 
@@ -63,9 +62,12 @@ func (s *TranscodeService) StartTranscode(ctx context.Context, videoUUID string,
 		req.Codec = "h264"
 	}
 
-	// If DRM requested, generate keys first
+	// Check if DRM is enabled globally via settings
+	drmEnabled := s.settingSvc.GetBool("drm_enabled", false)
+
+	// If DRM enabled, generate keys first
 	var drmKey *model.DRMKey
-	if req.DRM && s.drmSvc != nil {
+	if drmEnabled && s.drmSvc != nil {
 		drmKey, err = s.drmSvc.GenerateKeys(video.ID, licenseBaseURL)
 		if err != nil {
 			return nil, fmt.Errorf("generate DRM keys: %w", err)
@@ -98,7 +100,7 @@ func (s *TranscodeService) StartTranscode(ctx context.Context, videoUUID string,
 			"bitrate_kbps":       res.BitrateKbps,
 			"audio_bitrate_kbps": res.AudioBitrate,
 			"codec":              req.Codec,
-			"drm":                req.DRM,
+			"drm":                drmEnabled,
 			"has_audio":          video.HasAudio,
 			"segment_duration":   segDur,
 		}
@@ -135,7 +137,7 @@ func (s *TranscodeService) StartTranscode(ctx context.Context, videoUUID string,
 			BitrateKbps:    uint(res.BitrateKbps),
 			Codec:          req.Codec,
 			PlaylistS3Key:  fmt.Sprintf("videos/%s/variants/%s/playlist.m3u8", videoUUID, res.Name),
-			DRM:            req.DRM,
+			DRM:            drmEnabled,
 			Status:         "processing",
 		}
 		_ = s.videoRepo.CreateOrUpdateVariant(variant)
