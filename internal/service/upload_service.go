@@ -84,9 +84,14 @@ func (s *UploadService) CompleteUpload(ctx context.Context, videoUUID string, re
 	parts := make([]s3types.CompletedPart, len(req.Parts))
 	for i, p := range req.Parts {
 		partNum := int32(p.PartNumber)
+		etag := p.ETag
+		// S3 requires ETag wrapped in double quotes
+		if len(etag) > 0 && etag[0] != '"' {
+			etag = `"` + etag + `"`
+		}
 		parts[i] = s3types.CompletedPart{
 			PartNumber: &partNum,
-			ETag:       &p.ETag,
+			ETag:       &etag,
 		}
 	}
 
