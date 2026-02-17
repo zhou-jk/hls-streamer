@@ -62,15 +62,23 @@ func (s *TranscodeService) StartTranscode(ctx context.Context, videoUUID string,
 		req.Codec = "h264"
 	}
 
-	// Check if DRM is enabled globally via settings
-	drmEnabled := s.settingSvc.GetBool("drm_enabled", false)
+	// Determine DRM: video's own has_drm flag takes priority, otherwise fall back to global setting
+	drmEnabled := video.HasDRM
+	if !drmEnabled {
+		drmEnabled = s.settingSvc.GetBool("drm_enabled", false)
+	}
 
-	// If DRM enabled, generate keys first
+	// If DRM enabled, generate keys (idempotent — returns existing if already present)
 	var drmKey *model.DRMKey
 	if drmEnabled && s.drmSvc != nil {
 		drmKey, err = s.drmSvc.GenerateKeys(video.ID, licenseBaseURL)
 		if err != nil {
 			return nil, fmt.Errorf("generate DRM keys: %w", err)
+		}
+		// Ensure video is marked as DRM
+		if !video.HasDRM {
+			video.HasDRM = true
+			_ = s.videoRepo.Update(video)
 		}
 	}
 
