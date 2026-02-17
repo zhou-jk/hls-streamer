@@ -515,7 +515,7 @@ export default function VideoDetail() {
                   {
                     title: 'Actions', width: 120, render: (_: unknown, r: TranscodeTask) => (
                       <Space size="small">
-                        {['pending', 'queued'].includes(r.status) && (
+                        {['pending', 'queued', 'processing'].includes(r.status) && (
                           <Popconfirm title="Confirm cancel?" onConfirm={async () => { await videosApi.cancelTask(r.task_uuid); message.success('Cancelled'); load(); }}>
                             <Button type="link" size="small" danger>Cancel</Button>
                           </Popconfirm>

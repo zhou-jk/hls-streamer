@@ -263,8 +263,15 @@ func (s *TranscodeService) ListTasks(videoUUID string) ([]model.TranscodeTask, e
 	return s.taskRepo.ListByVideoID(video.ID)
 }
 
-func (s *TranscodeService) UpdateProgress(taskUUID string, progress uint8) error {
-	return s.taskRepo.UpdateProgress(taskUUID, progress)
+func (s *TranscodeService) UpdateProgress(taskUUID string, progress uint8) (string, error) {
+	if err := s.taskRepo.UpdateProgress(taskUUID, progress); err != nil {
+		return "", err
+	}
+	task, err := s.taskRepo.FindByUUID(taskUUID)
+	if err != nil {
+		return "", err
+	}
+	return task.Status, nil
 }
 
 func (s *TranscodeService) CompleteTask(taskUUID string, result model.JSON) error {

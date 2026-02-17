@@ -62,12 +62,13 @@ func (h *WorkerHandler) ReportProgress(c *gin.Context) {
 		return
 	}
 
-	if err := h.transcodeSvc.UpdateProgress(taskUUID, input.Progress); err != nil {
+	status, err := h.transcodeSvc.UpdateProgress(taskUUID, input.Progress)
+	if err != nil {
 		response.InternalError(c, err.Error())
 		return
 	}
 
-	response.OK(c, gin.H{"message": "progress updated"})
+	response.OK(c, gin.H{"message": "progress updated", "status": status})
 }
 
 func (h *WorkerHandler) CompleteTask(c *gin.Context) {

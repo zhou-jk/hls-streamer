@@ -179,7 +179,9 @@ func (w *Worker) handleTranscode(ctx context.Context, msg *queue.TaskMessage) er
 		return fmt.Errorf("download original: %w", err)
 	}
 
-	w.reportProgress(msg.TaskUUID, 10)
+	if err := w.reportProgress(msg.TaskUUID, 10); err != nil {
+		return err
+	}
 
 	// Resolve segment duration: per-task > config default
 	segDur := params.SegmentDuration
@@ -220,14 +222,18 @@ func (w *Worker) transcodeNormal(ctx context.Context, taskUUID, workDir, inputFi
 		return fmt.Errorf("transcode: %w", err)
 	}
 
-	w.reportProgress(taskUUID, 60)
+	if err := w.reportProgress(taskUUID, 60); err != nil {
+		return err
+	}
 
 	// Rename .ts to .jpeg and rewrite playlist
 	if err := w.renameSegments(workDir, w.cfg.HLS.SegmentExtension); err != nil {
 		return fmt.Errorf("rename segments: %w", err)
 	}
 
-	w.reportProgress(taskUUID, 70)
+	if err := w.reportProgress(taskUUID, 70); err != nil {
+		return err
+	}
 
 	// Upload to S3
 	s3Prefix := fmt.Sprintf("videos/%s/variants/%s", videoUUID, resolution)
@@ -235,7 +241,9 @@ func (w *Worker) transcodeNormal(ctx context.Context, taskUUID, workDir, inputFi
 		return fmt.Errorf("upload to S3: %w", err)
 	}
 
-	w.reportProgress(taskUUID, 95)
+	if err := w.reportProgress(taskUUID, 95); err != nil {
+		return err
+	}
 
 	resultJSON, _ := json.Marshal(map[string]interface{}{
 		"resolution":      resolution,
@@ -292,14 +300,18 @@ func (w *Worker) transcodeDRM(ctx context.Context, taskUUID, workDir, inputFile,
 		return fmt.Errorf("transcode encrypted hls: %w", err)
 	}
 
-	w.reportProgress(taskUUID, 60)
+	if err := w.reportProgress(taskUUID, 60); err != nil {
+		return err
+	}
 
 	// Rename .ts to .jpeg and rewrite playlist
 	if err := w.renameSegments(workDir, w.cfg.HLS.SegmentExtension); err != nil {
 		return fmt.Errorf("rename segments: %w", err)
 	}
 
-	w.reportProgress(taskUUID, 70)
+	if err := w.reportProgress(taskUUID, 70); err != nil {
+		return err
+	}
 
 	// Upload to S3
 	s3Prefix := fmt.Sprintf("videos/%s/variants/%s", videoUUID, resolution)
@@ -307,7 +319,9 @@ func (w *Worker) transcodeDRM(ctx context.Context, taskUUID, workDir, inputFile,
 		return fmt.Errorf("upload to S3: %w", err)
 	}
 
-	w.reportProgress(taskUUID, 95)
+	if err := w.reportProgress(taskUUID, 95); err != nil {
+		return err
+	}
 
 	resultJSON, _ := json.Marshal(map[string]interface{}{
 		"resolution":      resolution,
@@ -349,14 +363,18 @@ func (w *Worker) handleThumbnail(ctx context.Context, msg *queue.TaskMessage) er
 		return fmt.Errorf("probe for thumbnails: %w", err)
 	}
 
-	w.reportProgress(msg.TaskUUID, 20)
+	if err := w.reportProgress(msg.TaskUUID, 20); err != nil {
+		return err
+	}
 
 	// Extract thumbnails
 	if err := w.ff.ExtractThumbnails(ctx, inputFile, workDir, params.Count, params.Width, params.Height, probe.Duration); err != nil {
 		return fmt.Errorf("extract thumbnails: %w", err)
 	}
 
-	w.reportProgress(msg.TaskUUID, 70)
+	if err := w.reportProgress(msg.TaskUUID, 70); err != nil {
+		return err
+	}
 
 	// Upload thumbnails to S3
 	s3Prefix := fmt.Sprintf("videos/%s/thumbnails", params.VideoUUID)
@@ -487,8 +505,10 @@ func (w *Worker) downloadFromS3(ctx context.Context, s3Key, destPath string) err
 	return err
 }
 
+var errTaskCancelled = fmt.Errorf("task cancelled")
+
 // HTTP callbacks to API server
-func (w *Worker) reportProgress(taskUUID string, progress uint8) {
+func (w *Worker) reportProgress(taskUUID string, progress uint8) error {
 	body, _ := json.Marshal(map[string]interface{}{
 		"worker_id": w.id,
 		"progress":  progress,
@@ -497,9 +517,22 @@ func (w *Worker) reportProgress(taskUUID string, progress uint8) {
 	resp, err := http.Post(url, "application/json", bytes.NewReader(body))
 	if err != nil {
 		slog.Error("report progress failed", "task_uuid", taskUUID, "error", err)
-		return
+		return nil
 	}
-	resp.Body.Close()
+	defer resp.Body.Close()
+
+	var result struct {
+		Data struct {
+			Status string `json:"status"`
+		} `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err == nil {
+		if result.Data.Status == "cancelled" {
+			slog.Info("task cancelled by user", "task_uuid", taskUUID)
+			return errTaskCancelled
+		}
+	}
+	return nil
 }
 
 func (w *Worker) reportComplete(taskUUID string, result json.RawMessage, videoID uint, videoUUID string) {

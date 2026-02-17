@@ -15,7 +15,7 @@ func NewSettingRepo(db *gorm.DB) *SettingRepo {
 
 func (r *SettingRepo) List() ([]model.AppSetting, error) {
 	var settings []model.AppSetting
-	err := r.db.Order("key").Find(&settings).Error
+	err := r.db.Order("`key`").Find(&settings).Error
 	return settings, err
 }
 
