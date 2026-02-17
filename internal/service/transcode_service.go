@@ -16,20 +16,22 @@ import (
 )
 
 type TranscodeService struct {
-	taskRepo  *repository.TaskRepo
-	videoRepo *repository.VideoRepo
-	producer  *queue.Producer
-	s3        *storage.S3Client
-	drmSvc    *DRMService
+	taskRepo   *repository.TaskRepo
+	videoRepo  *repository.VideoRepo
+	producer   *queue.Producer
+	s3         *storage.S3Client
+	drmSvc     *DRMService
+	settingSvc *SettingService
 }
 
-func NewTranscodeService(taskRepo *repository.TaskRepo, videoRepo *repository.VideoRepo, producer *queue.Producer, s3 *storage.S3Client, drmSvc *DRMService) *TranscodeService {
+func NewTranscodeService(taskRepo *repository.TaskRepo, videoRepo *repository.VideoRepo, producer *queue.Producer, s3 *storage.S3Client, drmSvc *DRMService, settingSvc *SettingService) *TranscodeService {
 	return &TranscodeService{
-		taskRepo:  taskRepo,
-		videoRepo: videoRepo,
-		producer:  producer,
-		s3:        s3,
-		drmSvc:    drmSvc,
+		taskRepo:   taskRepo,
+		videoRepo:  videoRepo,
+		producer:   producer,
+		s3:         s3,
+		drmSvc:     drmSvc,
+		settingSvc: settingSvc,
 	}
 }
 
@@ -37,9 +39,10 @@ func NewTranscodeService(taskRepo *repository.TaskRepo, videoRepo *repository.Vi
 type StartTranscodeInput = TranscodeRequest
 
 type TranscodeRequest struct {
-	Resolutions []ResolutionSpec `json:"resolutions" binding:"required,min=1"`
-	Codec       string           `json:"codec"`
-	DRM         bool             `json:"drm"`
+	Resolutions     []ResolutionSpec `json:"resolutions" binding:"required,min=1"`
+	Codec           string           `json:"codec"`
+	DRM             bool             `json:"drm"`
+	SegmentDuration int              `json:"segment_duration"`
 }
 
 type ResolutionSpec struct {
@@ -72,6 +75,12 @@ func (s *TranscodeService) StartTranscode(ctx context.Context, videoUUID string,
 	// Update video status
 	_ = s.videoRepo.UpdateStatus(videoUUID, "processing")
 
+	// Resolve segment duration: per-request > DB setting > default 6
+	segDur := req.SegmentDuration
+	if segDur <= 0 {
+		segDur = s.settingSvc.GetInt("hls_segment_duration", 6)
+	}
+
 	var tasks []model.TranscodeTask
 
 	for _, res := range req.Resolutions {
@@ -91,6 +100,7 @@ func (s *TranscodeService) StartTranscode(ctx context.Context, videoUUID string,
 			"codec":              req.Codec,
 			"drm":                req.DRM,
 			"has_audio":          video.HasAudio,
+			"segment_duration":   segDur,
 		}
 
 		// Include DRM key material for the worker

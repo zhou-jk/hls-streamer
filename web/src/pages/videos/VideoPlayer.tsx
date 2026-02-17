@@ -31,6 +31,12 @@ export default function VideoPlayer() {
       const hls = new Hls({
         startLevel: -1,
         capLevelToPlayerSize: true,
+        emeEnabled: true,
+        drmSystems: {
+          'org.w3.clearkey': {
+            licenseUrl: '/api/v1/drm/clearkey/license',
+          },
+        },
       });
       hlsRef.current = hls;
       hls.loadSource(src);

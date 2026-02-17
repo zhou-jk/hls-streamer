@@ -1,9 +1,10 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { Tabs, Descriptions, Tag, Button, Form, Input, Select, Table, Space, Card, message, Popconfirm, Progress, Upload, Switch, Image } from 'antd';
+import { Tabs, Descriptions, Tag, Button, Form, Input, InputNumber, Select, Table, Space, Card, message, Popconfirm, Progress, Upload, Switch, Image } from 'antd';
 import { ArrowLeftOutlined, UploadOutlined, InboxOutlined, CopyOutlined, DownloadOutlined, PlayCircleOutlined, DeleteOutlined } from '@ant-design/icons';
 import Hls from 'hls.js';
 import { videosApi } from '../../api/videos';
+import { settingsApi } from '../../api/settings';
 import type { Video, VideoTranslation, VideoVariant, Thumbnail, Subtitle, TranscodeTask } from '../../types';
 import axios from 'axios';
 
@@ -69,7 +70,16 @@ export default function VideoDetail() {
 
     const src = `/play/${video.uuid}/master.m3u8`;
     if (Hls.isSupported()) {
-      const hls = new Hls({ startLevel: -1, capLevelToPlayerSize: true });
+      const hls = new Hls({
+        startLevel: -1,
+        capLevelToPlayerSize: true,
+        emeEnabled: true,
+        drmSystems: {
+          'org.w3.clearkey': {
+            licenseUrl: '/api/v1/drm/clearkey/license',
+          },
+        },
+      });
       previewHlsRef.current = hls;
       hls.loadSource(src);
       hls.attachMedia(previewRef.current);
@@ -117,6 +127,10 @@ export default function VideoDetail() {
     if (!uuid) return;
     videosApi.get(uuid).then((r) => setVideo(r.data.data)).catch(() => message.error('Video not found'));
     videosApi.listTasks(uuid).then((r) => setTasks(r.data.data || [])).catch(() => {});
+    settingsApi.list().then((r) => {
+      const seg = (r.data.data || []).find((s) => s.key === 'hls_segment_duration');
+      if (seg) transForm.setFieldValue('segment_duration', parseInt(seg.value, 10));
+    }).catch(() => {});
   };
 
   useEffect(() => { load(); }, [uuid]);
@@ -199,9 +213,9 @@ export default function VideoDetail() {
     }
   };
 
-  const handleTranscode = async (values: { resolutions: string[]; codec: string; drm: boolean }) => {
+  const handleTranscode = async (values: { resolutions: string[]; codec: string; drm: boolean; segment_duration: number }) => {
     const resolutions = PRESETS.filter((p) => values.resolutions.includes(p.name));
-    await videosApi.startTranscode(video.uuid, { resolutions, codec: values.codec || 'h264', drm: values.drm || false });
+    await videosApi.startTranscode(video.uuid, { resolutions, codec: values.codec || 'h264', drm: values.drm || false, segment_duration: values.segment_duration });
     message.success('Transcode tasks created');
     load();
   };
@@ -411,6 +425,9 @@ export default function VideoDetail() {
                 </Form.Item>
                 <Form.Item name="drm" label="DRM Encryption" valuePropName="checked" initialValue={false}>
                   <Switch />
+                </Form.Item>
+                <Form.Item name="segment_duration" label="Segment Duration" initialValue={6}>
+                  <InputNumber min={1} max={60} addonAfter="s" style={{ width: 100 }} />
                 </Form.Item>
                 <Form.Item><Button type="primary" htmlType="submit">Start Transcode</Button></Form.Item>
               </Form>

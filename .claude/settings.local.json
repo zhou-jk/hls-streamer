@@ -12,7 +12,10 @@
       "Bash(npm install:*)",
       "Bash(npm run build:*)",
       "Bash(go vet:*)",
-      "Bash(npx tsc:*)"
+      "Bash(npx tsc:*)",
+      "Bash(grep:*)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:raw.githubusercontent.com)"
     ]
   }
 }

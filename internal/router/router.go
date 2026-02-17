@@ -20,6 +20,7 @@ type Handlers struct {
 	Category  *handler.CategoryHandler
 	DRM       *handler.DRMHandler
 	Playback  *handler.PlaybackHandler
+	Setting   *handler.SettingHandler
 }
 
 func Setup(cfg *config.Config, h Handlers) *gin.Engine {
@@ -139,6 +140,14 @@ func Setup(cfg *config.Config, h Handlers) *gin.Engine {
 		authed.GET("/tasks", h.Transcode.ListAllTasks)
 		authed.POST("/tasks/:task_uuid/cancel", h.Transcode.CancelTask)
 		authed.POST("/tasks/:task_uuid/retry", h.Transcode.RetryTask)
+
+		// Settings (admin)
+		settings := authed.Group("/settings")
+		settings.Use(middleware.RequireRole("admin"))
+		{
+			settings.GET("", h.Setting.List)
+			settings.PUT("", h.Setting.Update)
+		}
 	}
 
 	// Worker internal API (no JWT, should be protected by network/API key)

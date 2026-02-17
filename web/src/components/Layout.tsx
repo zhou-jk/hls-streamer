@@ -7,6 +7,7 @@ import {
   AppstoreOutlined,
   DashboardOutlined,
   ThunderboltOutlined,
+  SettingOutlined,
   LogoutOutlined,
   MenuFoldOutlined,
   MenuUnfoldOutlined,
@@ -21,6 +22,7 @@ const menuItems = [
   { key: '/admin/users', icon: <UserOutlined />, label: 'Users' },
   { key: '/admin/categories', icon: <AppstoreOutlined />, label: 'Categories' },
   { key: '/admin/tasks', icon: <ThunderboltOutlined />, label: 'Tasks' },
+  { key: '/admin/settings', icon: <SettingOutlined />, label: 'Settings' },
 ];
 
 export default function AppLayout() {

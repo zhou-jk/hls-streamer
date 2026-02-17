@@ -13,6 +13,7 @@ import VideoPlayer from './pages/videos/VideoPlayer';
 import UserList from './pages/users/UserList';
 import CategoryList from './pages/categories/CategoryList';
 import TaskList from './pages/tasks/TaskList';
+import Settings from './pages/Settings';
 import Home from './pages/Home';
 import Watch from './pages/Watch';
 
@@ -38,6 +39,7 @@ export default function App() {
             <Route path="users" element={<UserList />} />
             <Route path="categories" element={<CategoryList />} />
             <Route path="tasks" element={<TaskList />} />
+            <Route path="settings" element={<Settings />} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

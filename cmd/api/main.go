@@ -77,6 +77,7 @@ func main() {
 		&model.DRMKey{},
 		&model.Worker{},
 		&model.ResolutionPreset{},
+		&model.AppSetting{},
 	); err != nil {
 		slog.Error("failed to migrate database", "error", err)
 		os.Exit(1)
@@ -117,13 +118,15 @@ func main() {
 	categoryRepo := repository.NewCategoryRepo(db)
 	workerRepo := repository.NewWorkerRepo(db)
 	drmRepo := repository.NewDRMRepo(db)
+	settingRepo := repository.NewSettingRepo(db)
 
 	// Services
 	authSvc := service.NewAuthService(userRepo, cfg.JWT)
 	videoSvc := service.NewVideoService(videoRepo)
 	uploadSvc := service.NewUploadService(s3Client, videoRepo)
 	drmSvc := service.NewDRMService(drmRepo, videoRepo)
-	transcodeSvc := service.NewTranscodeService(taskRepo, videoRepo, producer, s3Client, drmSvc)
+	settingSvc := service.NewSettingService(settingRepo)
+	transcodeSvc := service.NewTranscodeService(taskRepo, videoRepo, producer, s3Client, drmSvc, settingSvc)
 	categorySvc := service.NewCategoryService(categoryRepo)
 	workerSvc := service.NewWorkerService(workerRepo)
 
@@ -137,6 +140,7 @@ func main() {
 		Category:  handler.NewCategoryHandler(categorySvc),
 		DRM:       handler.NewDRMHandler(drmSvc, videoSvc),
 		Playback:  handler.NewPlaybackHandler(videoRepo, s3Client),
+		Setting:   handler.NewSettingHandler(settingSvc),
 	}
 
 	// Reprocess any completed tasks whose results were never applied
@@ -229,5 +233,13 @@ func seedDefaults(db *gorm.DB) {
 			db.Create(&admin)
 			slog.Info("default admin user created", "username", "admin", "password", "admin123")
 		}
+	}
+
+	// Seed default app settings
+	defaultSettings := []model.AppSetting{
+		{Key: "hls_segment_duration", Value: "6", Description: "HLS segment duration in seconds"},
+	}
+	for _, s := range defaultSettings {
+		db.FirstOrCreate(&s, "`key` = ?", s.Key)
 	}
 }
