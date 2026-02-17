@@ -268,7 +268,7 @@ func (w *Worker) transcodeDRM(ctx context.Context, taskUUID, workDir, inputFile,
 	//   Line 2: Path to local key file
 	//   Line 3: IV in hex
 	keyInfoFile := filepath.Join(workDir, "key_info.txt")
-	keyInfoContent := fmt.Sprintf("%s\n%s\n%s\n", keyURL, keyFile, iv)
+	keyInfoContent := fmt.Sprintf("%s\n%s\n0x%s\n", keyURL, keyFile, iv)
 	if err := os.WriteFile(keyInfoFile, []byte(keyInfoContent), 0600); err != nil {
 		return fmt.Errorf("write key info file: %w", err)
 	}

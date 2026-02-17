@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"strings"
 
 	"github.com/Zhou-JK/hls-streamer/internal/model"
 	"github.com/Zhou-JK/hls-streamer/internal/repository"
@@ -24,6 +25,12 @@ func (s *DRMService) GenerateKeys(videoID uint, baseURL string) (*model.DRMKey, 
 	// Check if key already exists
 	existing, err := s.drmRepo.FindByVideoID(videoID)
 	if err == nil && existing != nil {
+		// Backfill KeyURL if empty or pointing to old endpoint
+		expectedURL := fmt.Sprintf("%s/api/v1/drm/key/%s", baseURL, existing.KeyID)
+		if existing.KeyURL == "" || strings.Contains(existing.KeyURL, "/clearkey/") {
+			existing.KeyURL = expectedURL
+			_ = s.drmRepo.Update(existing)
+		}
 		return existing, nil
 	}
 

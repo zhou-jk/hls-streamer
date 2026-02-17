@@ -83,6 +83,9 @@ func main() {
 		os.Exit(1)
 	}
 
+	// One-time migration: copy license_url → key_url for DRM keys renamed in AES-128 switch
+	migrateDRMColumns(db)
+
 	// Seed default data
 	seedDefaults(db)
 
@@ -242,5 +245,18 @@ func seedDefaults(db *gorm.DB) {
 	}
 	for _, s := range defaultSettings {
 		db.FirstOrCreate(&s, "`key` = ?", s.Key)
+	}
+}
+
+// migrateDRMColumns handles the one-time migration from the old ClearKey/CENC DRM
+// model (license_url, pssh_box columns) to the new AES-128 model (key_url column).
+func migrateDRMColumns(db *gorm.DB) {
+	if db.Migrator().HasColumn(&model.DRMKey{}, "license_url") {
+		// Copy old URLs so they're not lost (GenerateKeys will fix the path on next use)
+		db.Exec("UPDATE drm_keys SET key_url = license_url WHERE (key_url IS NULL OR key_url = '') AND license_url != ''")
+		_ = db.Migrator().DropColumn(&model.DRMKey{}, "license_url")
+	}
+	if db.Migrator().HasColumn(&model.DRMKey{}, "pssh_box") {
+		_ = db.Migrator().DropColumn(&model.DRMKey{}, "pssh_box")
 	}
 }

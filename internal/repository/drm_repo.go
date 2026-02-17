@@ -38,3 +38,7 @@ func (r *DRMRepo) FindByKeyID(keyID string) (*model.DRMKey, error) {
 func (r *DRMRepo) DeleteByVideoID(videoID uint) error {
 	return r.db.Where("video_id = ?", videoID).Delete(&model.DRMKey{}).Error
 }
+
+func (r *DRMRepo) Update(key *model.DRMKey) error {
+	return r.db.Save(key).Error
+}
